@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolveX simulator</title>
+<style>
+  /* System fonts only: the demo has to work with no internet */
+  :root {
+    --tarmac: #24343d;
+    --tarmac-soft: #3a4c56;
+    --concrete: #e6eaea;
+    --line: #f5bc00;
+    --alarm: #c8231b;
+    --clear: #17785a;
+    --white: #ffffff;
+    --font: "Bahnschrift", "DIN Alternate", "Barlow", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--concrete); color: var(--tarmac); font-family: var(--font); }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 14px 32px; font-size: 1.05rem; }
+  header nav { display: flex; gap: 24px; align-items: baseline; }
+  header a { color: var(--tarmac); font-weight: 700; }
+  #link[data-up="false"] { color: var(--alarm); font-weight: 700; }
+  main {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+    gap: 20px;
+    padding: 0 32px 32px;
+  }
+  .card { background: var(--tarmac); color: var(--white); display: flex; flex-direction: column; }
+  .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; }
+  .card-head h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+  .card-head span { color: #b9c4c9; font-weight: 400; margin-left: 10px; }
+  canvas { display: block; width: 100%; height: auto; background: #5d7a4f; }
+  button {
+    font: inherit; font-weight: 700; font-size: 1.05rem; padding: 8px 18px; cursor: pointer;
+    background: var(--line); color: var(--tarmac); border: 0; border-radius: 0;
+  }
+  button:disabled { background: var(--tarmac-soft); color: #9fb0b8; cursor: default; }
+  button:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
+  .caption { margin: 0; padding: 12px 16px 4px; font-size: 1.12rem; min-height: 3.9em; line-height: 1.3; }
+  .caption[data-tone="alarm"] { color: #ffb4ae; font-weight: 700; }
+  .caption[data-tone="clear"] { color: #8fe0c0; font-weight: 700; }
+
+  /* The sensor reading: what the trigger looks at */
+  .sensor { padding: 8px 16px 14px; font-size: 1rem; color: #b9c4c9; }
+  .sensor-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .gauge { position: relative; height: 12px; background: var(--tarmac-soft); }
+  .gauge .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--white); }
+  .gauge .fill[data-over="true"] { background: var(--line); }
+  .gauge .limit { position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--line); }
+
+  .timeline { position: relative; margin: 0 16px; height: 6px; background: var(--tarmac-soft); }
+  .timeline .progress { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--line); }
+  .timeline-labels { position: relative; margin: 6px 16px 0; height: 1.3em; font-size: .95rem; color: #b9c4c9; }
+  .timeline-labels span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .timeline-labels span:first-child { transform: none; }
+  .timeline-labels span:last-child { transform: translateX(-100%); }
+
+  @media (max-width: 600px) { header, main { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <span>SolveX simulator</span>
+  <nav>
+    <span id="link" data-up="false" role="status">Connecting to the server</span>
+    <a href="/dev/live" target="_blank" rel="noopener">Open the live view</a>
+    <a href="/dev/monitor" target="_blank" rel="noopener">Open the monitor</a>
+    <button id="reset-all" type="button">Reset all</button>
+  </nav>
+</header>
+<main id="cars"></main>
+
+<script src="/static/common.js"></script>
+<script src="/static/scenes.js"></script>
+<script>
+"use strict";
+const MS = 1000;
+const TRIGGER_G = 1, GAUGE_MAX_G = 6;
+const CARS = [
+  { id: "car-1", kind: "crash", title: "Misses the turn", cruise: 20.3, color: "#3b82c4" },
+  { id: "car-2", kind: "brake", title: "Hard braking", cruise: 25, color: "#e07b39" },
+  { id: "car-3", kind: "loop", title: "Normal driving", cruise: 0, color: "#eceff0" },
+];
+const BASE_LOCATION = { lat: 36.3741, lon: 3.9012 };
+
+let data = null;              // the ready-made messages from /examples
+let ws = null;
+const link = document.getElementById("link");
+
+// ---------------------------------------------------------------- page
+
+const main = document.getElementById("cars");
+CARS.forEach((car, index) => {
+  Object.assign(car, {
+    index, mode: "idle", scn: null, x: 0, seq: 0, normalK: 0, k: 0, nextSendAt: 0,
+    result: null, resultAt: 0, peak: 0, fx: [], impactDone: false, lastSmoke: 0, leadOn: true,
+    idleText: "Driving normally. Start the scenario when you are ready.",
+  });
+  const el = document.createElement("section");
+  el.className = "card";
+  el.innerHTML = `
+    <div class="card-head"><h2>${car.id}<span>${car.title}</span></h2><button type="button" disabled></button></div>
+    <canvas width="${W}" height="${H}" aria-label="${car.title}"></canvas>
+    <p class="caption"></p>
+    <div class="timeline"><div class="progress"></div></div>
+    <div class="timeline-labels"><span style="left:0">Start</span><span style="left:50%">Impact</span><span style="left:100%">Crash model answers</span></div>
+    <div class="sensor">
+      <div class="sensor-row"><span>Sensor, last second</span><span class="reading">0.00 g</span></div>
+      <div class="gauge"><div class="fill"></div><div class="limit" style="left:${TRIGGER_G / GAUGE_MAX_G * 100}%"></div></div>
+      <div class="sensor-row" style="margin-top:6px"><span>0 g</span><span>Trigger at ${TRIGGER_G} g</span></div>
+    </div>`;
+  main.append(el);
+  car.el = el;
+  car.canvas = el.querySelector("canvas");
+  car.ctx = car.canvas.getContext("2d");
+  car.button = el.querySelector("button");
+  car.caption = el.querySelector(".caption");
+  car.reading = el.querySelector(".reading");
+  car.fill = el.querySelector(".fill");
+  car.progress = el.querySelector(".progress");
+  const scenario = car.kind !== "loop";
+  car.button.hidden = !scenario;
+  el.querySelector(".timeline").hidden = !scenario;
+  el.querySelector(".timeline-labels").hidden = !scenario;
+  car.button.addEventListener("click", () => (car.mode === "wrecked" ? resetCar(car) : startScenario(car)));
+});
+
+// ---------------------------------------------------------------- telemetry
+
+function peakG(message) {
+  return Math.max(...message.acc.map(([x, y]) => Math.hypot(x, y)));
+}
+
+function nextMessage(car) {
+  let message;
+  if (car.mode === "scenario") {
+    message = data[car.kind][car.k++];
+    if (car.k === 16) car.mode = car.kind === "crash" ? "wrecked" : "idle";
+  } else if (car.mode === "wrecked") {
+    message = { ...data.crash[15], gps_speed_kmh: 0 };  // the stopped car keeps reporting
+  } else {
+    message = data.normal[car.normalK++ % 16];
+  }
+  return {
+    ...message,
+    device_id: car.id,
+    seq: car.seq++,
+    recorded_at: new Date().toISOString(),
+    location: { lat: BASE_LOCATION.lat + car.index * 0.003, lon: BASE_LOCATION.lon },
+  };
+}
+
+// Each second of data is sent once it is complete, like a real blackbox: the impact in second 8 reaches
+// the server a second later, and the crash model answers 8 s after the impact.
+function tickSender() {
+  const now = performance.now();
+  for (const car of CARS) {
+    if (now < car.nextSendAt) continue;
+    car.nextSendAt += MS;
+    const message = nextMessage(car);
+    car.peak = peakG(message);
+    car.peakAt = now;
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+  }
+}
+
+function startScenario(car) {
+  const now = performance.now();
+  car.mode = "scenario";
+  car.k = 0;
+  car.result = null;
+  car.fx = [];
+  car.impactDone = false;
+  car.leadWasVisible = car.leadOn;  // a car already ahead needs no fade-in
+  car.leadOn = true;
+  car.scn = { startAt: now, x0: car.x };
+  car.nextSendAt = now + MS;
+  setButton(car);
+}
+
+function resetCar(car) {
+  car.mode = "idle";
+  car.scn = null;
+  car.result = null;
+  car.fx = [];
+  car.x = 0;
+  car.normalK = 0;
+  car.impactDone = false;
+  car.leadOn = true;
+  setButton(car);
+}
+
+document.getElementById("reset-all").addEventListener("click", async () => {
+  const response = await fetch("/dev/reset", { method: "POST" }).catch(() => null);
+  if (!response?.ok) link.textContent = "Reset failed. Restart the server.";
+});
+
+function setButton(car) {
+  const busy = car.mode === "scenario" || (car.scn && car.kind === "brake");
+  const label = car.mode === "wrecked" ? "Reset the car" : busy ? "Running" : "Start the scenario";
+  const disabled = (busy && car.mode !== "wrecked") || !data || !ws || ws.readyState !== WebSocket.OPEN;
+  if (car.button.textContent !== label) car.button.textContent = label;
+  if (car.button.disabled !== disabled) car.button.disabled = disabled;
+}
+
+const socketUrl = path => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}`;
+
+function connect() {
+  ws = new WebSocket(socketUrl("/ws/telemetry"));
+  ws.onopen = () => { link.textContent = "Connected to the server"; link.dataset.up = "true"; CARS.forEach(setButton); };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "prediction") {
+      const car = CARS.find(c => c.id === m.device_id);
+      if (car) { car.result = m; car.resultAt = performance.now(); }
+    } else if (m.type === "error") {
+      console.warn("The server rejected a message:", m);
+    }
+  };
+  ws.onclose = () => {
+    link.textContent = "Server not reachable. Retrying.";
+    link.dataset.up = "false";
+    CARS.forEach(setButton);
+    setTimeout(connect, 1000);
+  };
+}
+
+// "Reset all" can come from the monitor too
+function watchForReset() {
+  const feed = new WebSocket(socketUrl("/ws/monitor"));
+  feed.onmessage = e => { if (JSON.parse(e.data).type === "reset") CARS.forEach(resetCar); };
+  feed.onclose = () => setTimeout(watchForReset, 1000);
+}
+
+function updateText(car, p, now) {
+  const [text, tone] = captionFor(car, p, now);
+  if (car.caption.textContent !== text) car.caption.textContent = text;
+  car.caption.dataset.tone = tone;
+  // The reading follows the animation: second `floor(t)` of the recording, not the last message sent
+  let g = now - (car.peakAt ?? -1e9) < 2500 ? car.peak : 0;
+  if (p.t !== null && car.peaks) g = car.peaks[Math.min(15, Math.floor(p.t))];
+  car.reading.textContent = `${g.toFixed(2)} g`;
+  car.fill.style.width = `${Math.min(100, g / GAUGE_MAX_G * 100)}%`;
+  car.fill.dataset.over = g > TRIGGER_G;
+  car.progress.style.width = p.t === null || car.kind === "loop" ? "0" : `${Math.min(100, p.t / (2 * IMPACT_S) * 100)}%`;
+}
+
+// ---------------------------------------------------------------- start
+
+let lastFrame = performance.now();
+function frame() {
+  requestAnimationFrame(frame);    // first, so that an error in one frame can't stop the animation
+  // Not the time the browser passes in: it can be earlier than a click from the same frame
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  for (const car of CARS) {
+    const p = update(car, now, dt);
+    drawScene(car, now, p);
+    updateText(car, p, now);
+    setButton(car);
+  }
+}
+
+async function start() {
+  const files = ["normal", "crash", "trigger_no_crash"];
+  const loaded = await Promise.all(files.map(f => fetch(`/examples/${f}.json`).then(r => r.json())));
+  data = { normal: loaded[0], crash: loaded[1], brake: loaded[2] };
+  for (const car of CARS) if (data[car.kind]) car.peaks = data[car.kind].map(peakG);
+  const now = performance.now();
+  CARS.forEach(car => { car.nextSendAt = now + MS; setButton(car); });
+  connect();
+  watchForReset();
+  // A worker's timer keeps its pace while this tab is in the background. The page's own timers don't.
+  const ticker = new Worker(URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 50)"])));
+  ticker.onmessage = tickSender;
+  requestAnimationFrame(frame);
+}
+start();
+</script>
+</body>
+</html>

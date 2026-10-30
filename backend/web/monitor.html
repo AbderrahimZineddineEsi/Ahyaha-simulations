@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolveX monitor</title>
+<link rel="stylesheet" href="/static/panel.css">
+</head>
+<body>
+<header>
+  <span>SolveX crash monitor</span>
+  <nav>
+    <span id="link" data-up="false" role="status">Connecting to the server</span>
+    <a href="/dev/live" target="_blank" rel="noopener">Open the live view</a>
+    <a href="/dev/simulator" target="_blank" rel="noopener">Open the simulator</a>
+    <button id="reset-all" type="button">Reset all</button>
+  </nav>
+</header>
+<main id="cars">
+  <p class="empty" id="empty">No car is sending data yet. Start the telemetry service, and each car appears here.</p>
+</main>
+
+<script src="/static/common.js"></script>
+<script src="/static/panel.js"></script>
+<script>
+const cars = new Map();
+const main = document.getElementById("cars");
+const link = document.getElementById("link");
+const empty = document.getElementById("empty");
+
+function removeCar(id) {
+  cars.get(id)?.el.remove();
+  cars.delete(id);
+  if (!cars.size) main.append(empty);
+}
+
+function clearCars() {
+  [...cars.keys()].forEach(removeCar);
+}
+
+document.getElementById("reset-all").addEventListener("click", async () => {
+  const response = await fetch("/dev/reset", { method: "POST" }).catch(() => null);
+  if (!response?.ok) link.textContent = "Reset failed. Restart the server.";
+});
+
+function addCar(id) {
+  const car = createPanel(id);
+  empty.remove();
+  main.append(car.el);
+  cars.set(id, car);
+  return car;
+}
+
+function onMessage(m) {
+  if (m.type === "reset") return clearCars();
+  if (m.type === "car_removed") return removeCar(m.device_id);
+  if (m.type !== "status" && m.type !== "prediction") return;
+  applyToPanel(cars.get(m.device_id) ?? addCar(m.device_id), m);
+}
+
+function connect() {
+  const scheme = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${scheme}://${location.host}/ws/monitor`);
+  ws.onopen = () => {  // the server replays its current cars, so anything left on the page is out of date
+    clearCars();
+    link.textContent = "Connected to the server";
+    link.dataset.up = "true";
+  };
+  ws.onmessage = e => onMessage(JSON.parse(e.data));
+  ws.onclose = () => {
+    link.textContent = "Server not reachable. Retrying.";
+    link.dataset.up = "false";
+    setTimeout(connect, 1000);
+  };
+}
+
+connect();
+setInterval(() => cars.forEach(render), 500);
+</script>
+</body>
+</html>

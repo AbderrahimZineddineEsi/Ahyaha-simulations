@@ -6,6 +6,16 @@ lightgbm==4.5.0
 joblib==1.4.2
 onnxruntime
 huggingface_hub
-# WebSocket server (server/)
+# Backend (backend/)
 fastapi
 uvicorn[standard]
+sqlalchemy[asyncio]
+aiosqlite
+alembic
+python-socketio
+aiohttp   # the Socket.IO client the tests use
+pyjwt
+bcrypt
+httpx
+pytest
+pytest-asyncio
