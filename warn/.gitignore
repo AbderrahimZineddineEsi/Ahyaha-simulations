@@ -1,0 +1,5 @@
+# Model weights stay out of git (as m*/models/ does at the root): python warn/tools/export_m1.py rebuilds this
+static/m1_model.json
+
+# Cached answers from OSRM, Overpass and Open-Meteo while building roads.json
+tools/cache/

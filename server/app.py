@@ -21,17 +21,24 @@ from typing import Annotated, Literal
 import numpy as np
 import uvicorn
 from annotated_types import Len
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request, WebSocket
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from blackbox_sim import LEAD_IN_S, packet_line, reply_line, scenario_packets, stamp
 from database import Database
-from m2_model import M2
+from incident import Engine
+from m2_model import M2, bb
+from ops import make_router
+from severity import Severity
 from stream import AFTER_S, BEFORE_S, HZ, DeviceStream
 
 MAX_MESSAGE_BYTES = 200_000  # a full-precision second is about 15 kB
 MAX_ERRORS_SHOWN = 3
 STREAM_TIMEOUT_S = 3  # silence that means a car's stream has stopped
+CAR_GONE_S = 30       # silence that takes a car off the monitor, unless it crashed
+ALARM_LEVELS = ("crash", "likely")
 
 log = logging.getLogger("solvex")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -67,6 +74,18 @@ class Telemetry(BaseModel):
 
 
 @dataclass
+class Blackbox:
+    scenario: str
+    started: float
+    stopped: bool = False
+    lead_in_s: int = LEAD_IN_S
+
+    def started_message(self, device_id):
+        return {"type": "blackbox_started", "device_id": device_id, "scenario": self.scenario, "lead_in_s": self.lead_in_s,
+                "elapsed_s": time.monotonic() - self.started}
+
+
+@dataclass
 class Car:
     stream: DeviceStream
     ws: WebSocket | None = None
@@ -77,8 +96,11 @@ class Car:
 
 cars: dict[str, Car] = {}
 monitors: set[WebSocket] = set()
+blackboxes: dict[str, "Blackbox"] = {}  # the ones running on the server
 db = Database()
 m2 = M2()
+engine = Engine(Severity())
+background: set[asyncio.Task] = set()
 
 
 def error(code, message, device_id=None, seq=None):
@@ -151,6 +173,8 @@ async def predict(device_id, car, w):
     car.prediction = reply
     await send(car.ws, reply)
     await tell_monitors(reply)
+    if device_id == engine.device_id:  # a blackbox the demo scenarios started
+        await engine.on_prediction(reply, bb.crash_summary(w.acc, w.gyro, w.speed))
 
 
 async def handle(raw, ws):
@@ -169,9 +193,11 @@ async def handle(raw, ws):
     was_collecting = car.stream.collecting
     speed = np.nan if t.gps_speed_kmh is None else t.gps_speed_kmh
     windows = car.stream.push(t.seq, acc, gyro, speed, t.recorded_at, t.location)
+    peak_g = float(np.hypot(acc[:, 0], acc[:, 1]).max())
     if car.stream.collecting and not was_collecting:
         log.info("%s TRIGGER at seq=%d, collecting the next %d s", t.device_id, t.seq, AFTER_S)
-    await publish_status(t.device_id, car, float(np.hypot(acc[:, 0], acc[:, 1]).max()))
+        await engine.on_trigger(t.device_id, t.seq, peak_g, t.location)
+    await publish_status(t.device_id, car, peak_g)
     for w in windows:
         await predict(t.device_id, car, w)
 
@@ -188,18 +214,24 @@ async def watch_for_silence():
         await asyncio.sleep(1)
         now = time.monotonic()
         for device_id, car in list(cars.items()):
-            if car.stream.collecting and now - car.last_seen > STREAM_TIMEOUT_S:
+            silent = now - car.last_seen
+            if car.stream.collecting and silent > STREAM_TIMEOUT_S:
                 await stop_stream(device_id, car)
+            elif silent > CAR_GONE_S and not (car.prediction and car.prediction["level"] in ALARM_LEVELS):
+                del cars[device_id]
+                await tell_monitors({"type": "car_removed", "device_id": device_id})
 
 
 @asynccontextmanager
 async def lifespan(app):
-    task = asyncio.create_task(watch_for_silence())
+    tasks = [asyncio.create_task(watch_for_silence()), asyncio.create_task(engine.run())]
     yield
-    task.cancel()
+    for task in tasks:
+        task.cancel()
 
 
 app = FastAPI(title="SolveX server", lifespan=lifespan)
+app.include_router(make_router(engine))
 
 
 @app.websocket("/ws/telemetry")
@@ -229,6 +261,8 @@ async def telemetry(ws: WebSocket):
 async def monitor(ws: WebSocket):
     """Live feed for the monitor page. It only listens: nothing it sends is used."""
     await ws.accept()
+    for device_id, blackbox in blackboxes.items():
+        await send(ws, blackbox.started_message(device_id))
     for car in cars.values():
         for message in (car.prediction, car.status):
             if message:
@@ -241,9 +275,131 @@ async def monitor(ws: WebSocket):
         monitors.discard(ws)
 
 
+PAGES = Path(__file__).parent
+
+
 @app.get("/")
+def dashboard_page():
+    return FileResponse(PAGES / "dashboard.html")
+
+
+@app.get("/dev")
+def dev_page():
+    return FileResponse(PAGES / "dev.html")
+
+
+@app.get("/dev/monitor")
 def monitor_page():
-    return FileResponse(Path(__file__).parent / "monitor.html")
+    return FileResponse(PAGES / "monitor.html")
+
+
+@app.get("/dev/live")
+def live_page():
+    return FileResponse(PAGES / "live.html")
+
+
+@app.get("/dev/simulator")
+def simulator_page():
+    return FileResponse(PAGES / "simulator.html")
+
+
+app.mount("/examples", StaticFiles(directory=Path(__file__).parent / "examples"), name="examples")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+
+class Replies:
+    """Stands in for a blackbox's WebSocket: collects what the server answers."""
+    def __init__(self):
+        self.messages = []
+
+    async def send_json(self, message):
+        self.messages.append(message)
+
+
+async def run_blackbox(device_id, blackbox):
+    """Sends one packet per second through the same path as a real blackbox, and prints each one."""
+    replies = Replies()
+    next_at = blackbox.started
+    try:
+        await tell_monitors(blackbox.started_message(device_id))
+        yield f"{device_id}: {blackbox.scenario}. Press Ctrl+C to stop.\n\n"
+        for seq, (stage, packet) in enumerate(scenario_packets(blackbox.scenario, blackbox.lead_in_s)):
+            # A second is sent once it is complete, so the prediction comes 8 s after the impact
+            next_at += 1
+            await asyncio.sleep(max(0, next_at - time.monotonic()))
+            if blackbox.stopped:
+                yield "\nStopped by a reset on the server.\n"
+                return
+            packet = stamp(packet, device_id, seq)
+            raw = json.dumps(packet, separators=(",", ":"))
+            await handle(raw, replies)
+            yield packet_line(stage, packet, len(raw))
+            for message in replies.messages:
+                yield reply_line(message)
+            replies.messages.clear()
+    finally:
+        del blackboxes[device_id]
+        asyncio.create_task(tell_monitors({"type": "blackbox_stopped", "device_id": device_id}))
+
+
+@app.get("/blackbox/{device_id}/{scenario}")
+async def start_blackbox(device_id: str, scenario: Literal["normal", "crash", "braking"]):
+    if device_id in blackboxes:
+        return PlainTextResponse(f"{device_id} is already running. Stop it first, or use another name.\n", 409)
+    blackboxes[device_id] = Blackbox(scenario, time.monotonic())
+    return StreamingResponse(run_blackbox(device_id, blackboxes[device_id]), media_type="text/plain")
+
+
+async def reset_everything():
+    """Clears every car, crashes included, the response in progress, and the blackboxes running here. The database stays."""
+    cars.clear()
+    for blackbox in blackboxes.values():
+        blackbox.stopped = True
+    await tell_monitors({"type": "reset"})
+    await engine.reset()
+    log.info("everything reset")
+
+
+@app.post("/api/reset")
+async def reset():
+    await reset_everything()
+    return {"status": "ok"}
+
+
+async def begin_scenario(key):
+    """Starts the crash of user 0 for scenario a or b: the blackbox's data goes through the real pipeline."""
+    await reset_everything()
+    device_id = await engine.start_scenario(key)
+    blackboxes[device_id] = Blackbox("crash", time.monotonic(), lead_in_s=0)
+    return device_id
+
+
+async def consume(generator):
+    async for _ in generator:
+        pass
+
+
+@app.post("/dev/start/{key}")
+async def dev_start(key: Literal["a", "b", "2"]):
+    device_id = await begin_scenario(key)
+    task = asyncio.create_task(consume(run_blackbox(device_id, blackboxes[device_id])))
+    background.add(task)
+    task.add_done_callback(background.discard)
+    return {"device_id": device_id}
+
+
+@app.get("/dev/run/{key}")
+async def dev_run(key: Literal["a", "b", "2"], request: Request):
+    """The same as the /dev button, from a terminal: `curl -N`, and the packets print as they are sent."""
+    device_id = await begin_scenario(key)
+    host = request.headers.get("host", "localhost:8000")
+
+    async def stream():
+        yield f"Scenario {key.upper()} started. Watch it on http://{host}/ and http://{host}/dev\n\n"
+        async for chunk in run_blackbox(device_id, blackboxes[device_id]):
+            yield chunk
+
+    return StreamingResponse(stream(), media_type="text/plain")
 
 
 @app.get("/health")
@@ -268,5 +424,6 @@ if __name__ == "__main__":
     args = ap.parse_args()
     log.info("Trigger window: %d s before, %d s after", BEFORE_S, AFTER_S)
     log.info("Connect to ws://%s:%d/ws/telemetry", lan_ip(), args.port)
-    log.info("Watch it live at http://localhost:%d/", args.port)
+    log.info("Dashboard: http://localhost:%d/", args.port)
+    log.info("Dev:       http://localhost:%d/dev", args.port)
     uvicorn.run(app, host=args.host, port=args.port, ws_max_size=MAX_MESSAGE_BYTES)

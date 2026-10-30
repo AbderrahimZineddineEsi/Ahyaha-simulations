@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolveX road warnings</title>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><strong>SolveX</strong><span>Road warnings · M1 running on the phone</span></div>
+  <nav id="presets" class="presets" aria-label="Situations"></nav>
+</header>
+
+<section class="scene">
+  <p id="blurb" class="blurb"></p>
+  <div class="controls">
+    <label>Day
+      <select id="weekday">
+        <option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option>
+        <option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option>
+      </select>
+    </label>
+    <label>Hour <select id="hour"></select></label>
+    <label>Scan every
+      <select id="interval"><option value="5">5 s</option><option value="10" selected>10 s</option><option value="20">20 s</option></select>
+    </label>
+    <button id="play" type="button">Pause</button>
+    <button id="restart" type="button">Restart</button>
+  </div>
+</section>
+
+<main class="split">
+  <section class="mapside" aria-label="Map">
+    <div class="mapwrap">
+      <div id="map"></div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="lv-low"></i>low</span><span><i class="lv-medium"></i>medium</span>
+        <span><i class="lv-high"></i>high</span><span><i class="lv-very"></i>very high</span>
+        <span><i class="lv-none"></i>not scanned yet</span>
+      </div>
+    </div>
+    <div class="log">
+      <table>
+        <thead><tr><th>Scan</th><th>At</th><th>Request to the map pack</th><th>Segments</th><th>Peak</th><th>M1 time</th><th>Result</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="phoneside" aria-label="Phone">
+    <div class="phone">
+      <div class="screen" id="screen">
+        <div class="p-status"><span id="p-clock">Tue 11:00</span><span class="p-m1">M1 · on device</span><button id="p-mute" type="button" aria-label="Voice on" title="Voice on">♪</button></div>
+        <div class="p-road"><strong id="p-road">–</strong><span id="p-place"></span></div>
+        <svg id="ribbon" class="p-ribbon" viewBox="0 0 320 388" role="img" aria-label="Road ahead, coloured by risk"></svg>
+        <div class="p-now">
+          <div class="p-speed"><b id="p-speed">0</b><small>km/h</small></div>
+          <div id="p-chip" class="p-chip">Scanning…</div>
+        </div>
+        <div class="p-scan"><div class="p-bar"><i id="p-bar"></i></div><span id="p-scan-text"></span></div>
+        <div id="p-toast" class="p-toast" hidden></div>
+        <div id="p-banners" class="p-banners"></div>
+        <div id="p-full" class="p-full" hidden></div>
+        <div id="p-compare" class="p-compare" hidden></div>
+        <div id="p-end" class="p-end" hidden></div>
+      </div>
+    </div>
+    <p class="phone-note" id="phone-note"></p>
+  </section>
+</main>
+
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/m1.js"></script>
+<script src="/static/scan.js"></script>
+<script src="/static/phone.js"></script>
+<script src="/static/map.js"></script>
+<script src="/static/drive.js"></script>
+</body>
+</html>
