@@ -1,0 +1,15 @@
+in sign-up, we can ask the user for info like :
+job, or at least wether he can perform first aid, 
+and we'll use it later when an accident happen if it's urgent we target them  
+
+
+2. bystanders automatically receive instructions if needed 
+
+
+ecc everything claude code affan
+
+
+
+
+
+
