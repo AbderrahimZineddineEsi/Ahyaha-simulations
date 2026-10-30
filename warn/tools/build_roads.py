@@ -31,6 +31,7 @@ OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.sy
             "https://maps.mail.ru/osm/tools/overpass/api/interpreter"]   # tried in turn when one is overloaded
 ELEVATION = "https://api.open-meteo.com/v1/elevation"
 PAUSE_S = 1.2
+OFFLINE = False           # --offline: use only what is already in the cache
 
 SEGMENT_M = 200
 EARTH_M = 6_371_000
@@ -115,6 +116,8 @@ def fetch(url, data=None, name=None, attempts=8):
     path = CACHE / f"{name or 'req'}-{key}.json"
     if path.exists():
         return json.loads(path.read_text())
+    if OFFLINE and name.endswith(("ways", "places")):
+        raise RuntimeError("offline: not in the cache")
     for attempt in range(attempts):
         url = urls[attempt % len(urls)]
         try:
@@ -162,13 +165,30 @@ def ways_query(points, radius=30):
     return f'[out:json][timeout:120];way["highway"~"^({classes})$"](around:{radius},{line});out body geom;'
 
 
-def overpass_ways(geometry, chunk_m=4000):
-    """The OSM ways along a route. One query for the whole route; if the server refuses, one per ~4 km."""
+def cached_union(name):
+    """Everything saved in earlier answers of one kind, merged: other routes along the same roads cover this one too."""
+    found = {}
+    for path in CACHE.glob(f"{name}-*.json"):
+        for e in json.loads(path.read_text()).get("elements", []):
+            found[(e["type"], e["id"])] = e
+    return list(found.values())
+
+
+def overpass_ways(geometry, nodes, chunk_m=4000):
+    """The OSM ways along a route. One query for the whole route. If the servers refuse: ways saved from earlier routes,
+    when they cover the route's nodes; otherwise one query per ~4 km."""
     try:
         result = fetch(OVERPASS, data=urllib.parse.urlencode({"data": ways_query(geometry)}), name="ways", attempts=3)
         return {w["id"]: w for w in result["elements"] if w["type"] == "way"}
     except RuntimeError:
-        print("  whole-route query refused: asking in pieces", file=sys.stderr)
+        print("  whole-route query refused", file=sys.stderr)
+    saved = {e["id"]: e for e in cached_union("ways") if e["type"] == "way"}
+    have = {n for w in saved.values() for n in w["nodes"]}
+    covered = sum(n in have for n in nodes) / len(nodes)
+    if covered >= 0.98:
+        print(f"  using OSM ways saved from earlier routes ({covered:.1%} of the route's nodes)", file=sys.stderr)
+        return saved
+    print(f"  saved ways cover only {covered:.1%}: asking in pieces", file=sys.stderr)
     ways, piece, length = {}, [geometry[0]], 0.0
     pieces = []
     for a, b in zip(geometry, geometry[1:]):
@@ -190,8 +210,12 @@ def overpass_places(lines):
     lons = [p[1] for line in lines for p in line]
     box = f"{min(lats) - .03:.3f},{min(lons) - .03:.3f},{max(lats) + .03:.3f},{max(lons) + .03:.3f}"
     query = f'[out:json][timeout:60];node["place"~"^(city|town|village|suburb|hamlet)$"]({box});out body;'
-    result = fetch(OVERPASS, data=urllib.parse.urlencode({"data": query}), name="places")
-    return [(e["lat"], e["lon"], TOWN_RADIUS_M[e["tags"]["place"]], e["tags"].get("name:fr") or e["tags"].get("name", "")) for e in result["elements"]]
+    try:
+        elements = fetch(OVERPASS, data=urllib.parse.urlencode({"data": query}), name="places", attempts=3)["elements"]
+    except RuntimeError:
+        print("  places query refused: using places saved from earlier routes", file=sys.stderr)
+        elements = [e for e in cached_union("places") if e["type"] == "node"]
+    return [(e["lat"], e["lon"], TOWN_RADIUS_M[e["tags"]["place"]], e["tags"].get("name:fr") or e["tags"].get("name", "")) for e in elements]
 
 
 def elevations(points):
@@ -267,11 +291,8 @@ def road_tags(way):
         circ = 1
     else:
         circ = 2
-    lanes = parse_int(tags.get("lanes"))
-    if lanes is None:
-        lanes = 4 if catr == 1 else (4 if circ == 3 else 2)
-    elif circ == 3 and oneway:
-        lanes *= 2          # BAAC counts the lanes of both directions
+    # nbv is OSM `lanes` as tagged (MODEL_SPEC.md); 2 when OSM leaves it blank
+    lanes = parse_int(tags.get("lanes")) or 2
     if tags.get("tunnel") in ("yes", "building_passage"):
         infra = 1
     elif tags.get("bridge") in ("yes", "viaduct"):
@@ -312,7 +333,7 @@ def plan_code(turns):
 
 def build_route(points, places):
     route = osrm_route(points)
-    ways = overpass_ways(route["geometry"])
+    ways = overpass_ways(route["geometry"], route["nodes"])
     net = Network(ways)
     known = [n for n in route["nodes"] if n in net.coords]
     if len(known) < 0.9 * len(route["nodes"]):
@@ -435,9 +456,12 @@ def main():
     ap.add_argument("--presets", default=str(WARN / "presets.json"))
     ap.add_argument("--out", default=str(WARN / "roads.json"))
     ap.add_argument("--only", help="build just this preset id")
+    ap.add_argument("--offline", action="store_true", help="ask Overpass for nothing: use the OSM data already in the cache")
     ap.add_argument("--report", action="store_true", help="print each segment with M1's score at the preset's clock")
     ap.add_argument("--summary", action="store_true", help="with --report: print runs of equal level instead of every segment")
     args = ap.parse_args()
+    global OFFLINE
+    OFFLINE = args.offline
 
     presets = json.loads(Path(args.presets).read_text())["presets"]
     if args.only:

@@ -8,14 +8,15 @@
   const EXTEND_M = 3000;         // a stretch that runs past the window: look this much further
   const MAX_AHEAD_M = 9000;
   const LONG_M = 1500;           // from this length a stretch is "long": a different route is worth checking
-  const SHORT_JUNCTION_M = 600;  // a short stretch whose peak is at a junction is a "junction" warning
-  const MIN_CUT = 0.4;           // a different route must cut the risky km by this much
+  const SHORT_JUNCTION_M = 650;  // up to three segments: a short stretch that has a junction in it is a "junction" warning
+  const MIN_CUT = 0.3;           // a different route must cut the risk-weighted distance by this much
   const MIN_BRANCH_AHEAD_M = 300;
   const SHARP_BEND_DEG = 30;     // a segment that turns this much in 200 m is a real bend, not a gentle curve
   const BENDY_SHARE = 0.4;       // this share of sharp segments makes a stretch "bends"
   const REF_CLOCK = { weekday: 1, hour: 11 };   // a calm reference time: Tuesday 11h
   const SPEED_SHARE = 0.85;      // the driver's pace as a share of the speed limit
   const HIGH = 2;                // level rank of "high"
+  const WARN_MEAN_X = 1.8;       // a stretch with no very high segment must average this: a margin over M1's 1.5 cut, so it doesn't flicker
   const JUNCTIONS = [2, 3, 5];
   const DRY = { rain_mm: 0, rain_3h_mm: 0, is_rain: 0, is_fog: 0, is_snow: 0, is_storm: 0 };
 
@@ -50,8 +51,8 @@
     });
   }
 
-  // Runs of high or very high segments. One calmer segment in the middle doesn't split a run. A run counts when it has
-  // two high segments or one very high one.
+  // Runs of high or very high segments. One calmer segment in the middle doesn't split a run. A run counts when it
+  // averages 1.8x or more (so a stretch hovering just over the 1.5x line is not a warning) or has a very high segment.
   function findStretches(scored) {
     const flagged = scored.map((s) => s.rank >= HIGH);
     const runs = [];
@@ -67,14 +68,15 @@
       .map(([from, to]) => {
         const items = scored.slice(from, to + 1);
         const count = items.filter((s) => s.rank >= HIGH).length;
+        const mean = items.reduce((n, s) => n + s.x, 0) / items.length;
         const peak = items.reduce((best, s) => (s.x > best.x ? s : best), items[0]);
         return {
-          items, a: items[0].seg.a, b: items[items.length - 1].seg.b, peak, count,
+          items, a: items[0].seg.a, b: items[items.length - 1].seg.b, peak, count, mean,
           level: peak.rank >= 3 ? "very high" : "high",
           open: to === scored.length - 1,           // runs on past the end of what we looked at
         };
       })
-      .filter((s) => s.count >= 2 || s.level === "very high");
+      .filter((s) => s.level === "very high" || (s.count >= 2 && s.mean >= WARN_MEAN_X));
   }
 
   // Why is it risky, and so which warning to show. Re-scores the stretch at a calm reference time: if it stops being
@@ -105,6 +107,8 @@
     return { type, bendy, town, refX: peakRef.x, refLevel: peakRef.level, causedBy: stayRisky < 0.5 ? "time" : "road" };
   }
 
+  // km times how many times riskier than average: what a trip through these segments adds up to
+  const exposure = (scored) => scored.reduce((n, s) => n + (s.seg.b - s.seg.a) / 1000 * s.x, 0);
   const riskyKm = (scored) => scored.filter((s) => s.rank >= HIGH).reduce((n, s) => n + (s.seg.b - s.seg.a), 0) / 1000;
   const minutes = (scored) => scored.reduce((n, s) => n + (s.seg.b - s.seg.a) / (SPEED_SHARE * s.seg.vma * 1000 / 60), 0);
 
@@ -117,6 +121,7 @@
       this.fetchRoad = fetchRoad;
       this.positionOf = positionOf;    // (leg, metres) -> [lat, lon]
       this.leg = "main";
+      this.rerouting = false;          // the driver accepted the other route and has not reached the branch yet
       this.announced = [];             // [leg, a, b]: stretches already warned about
       this.requests = 0;
     }
@@ -152,6 +157,8 @@
       }
       const alerts = [];
       for (const stretch of stretches) {
+        if (this.rerouting && this.leg === "main" && stretch.a >= this.preset.branch_m) continue;   // a road the driver has chosen not to take
+        if (stretch.a - metres > LOOKAHEAD_M) continue;   // seen only while measuring another stretch: announce it when it is near
         stretch.clock = this.clock;
         stretch.dark = dark;
         const known = this.announced.find(([leg, a, b]) => leg === this.leg && stretch.a < b && stretch.b > a);
@@ -183,14 +190,13 @@
       }));
       const mainScored = scoreSegments(this.m1, main.segments, this.clock, dark, main.weather);
       const altScored = scoreSegments(this.m1, alt.segments, this.clock, dark, alt.weather);
-      const mainKm = riskyKm(mainScored), altKm = riskyKm(altScored);
-      const cut = mainKm > 0 ? 1 - altKm / mainKm : 0;
-      const compare = {
-        branch_m: preset.branch_m, cut,
-        main: { riskyKm: mainKm, minutes: minutes(mainScored), km: (main.to_m - main.from_m) / 1000 },
-        alt: { riskyKm: altKm, minutes: minutes(altScored), km: (alt.to_m - alt.from_m) / 1000 },
-        altScored,
+      const summary = (scored, window) => {
+        const km = (window.to_m - window.from_m) / 1000, risk = exposure(scored);
+        return { riskyKm: riskyKm(scored), avgX: risk / km, exposure: risk, minutes: minutes(scored), km };
       };
+      const mainSum = summary(mainScored, main), altSum = summary(altScored, alt);
+      const cut = mainSum.exposure > 0 ? 1 - altSum.exposure / mainSum.exposure : 0;
+      const compare = { branch_m: preset.branch_m, cut, main: mainSum, alt: altSum, altScored };
       if (cut >= MIN_CUT) alert.offer = compare;
       else { alert.noSafer = true; alert.compare = compare; }
     }
@@ -198,10 +204,11 @@
     // The driver took the other route at the branch point
     takeAlternative() {
       this.leg = "alt";
+      this.rerouting = false;
     }
   }
 
-  const api = { Phone, findStretches, classify, scoreSegments, rowFor, sunElevationDeg, riskyKm, minutes,
+  const api = { Phone, findStretches, classify, scoreSegments, rowFor, sunElevationDeg, riskyKm, exposure, minutes,
                 LOOKAHEAD_M, LONG_M, SPEED_SHARE, REF_CLOCK };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Scan = api;

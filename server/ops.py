@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from demo_data import PLACES
 
 ERRORS = {"not_found": 404, "closed": 409, "bad_action": 422, "no_crash": 409, "bad_severity": 422, "unavailable": 409,
-          "already_dispatched": 409, "nobody_left": 409, "not_accepted": 409, "bad_radius": 422}
+          "already_dispatched": 409, "nobody_left": 409, "not_accepted": 409, "bad_radius": 422,
+          "no_network": 409, "already_sent": 409}
 
 
 class Answer(BaseModel):
@@ -35,6 +36,10 @@ class CallHelp(BaseModel):
 
 class Phone(BaseModel):
     who: Literal["user", "contact"]
+
+
+class Warning(BaseModel):
+    message: Literal["dont_go", "no_help"]
 
 
 class Auto(BaseModel):
@@ -110,6 +115,16 @@ def make_router(engine):
     async def call_person(incident_id: int, body: Phone):
         current(incident_id)
         return check(await engine.call_person(body.who))
+
+    @router.post("/api/incidents/{incident_id}/warn")
+    async def warn(incident_id: int, body: Warning):
+        current(incident_id)
+        return check(await engine.warn_driver(body.message))
+
+    @router.post("/api/incidents/{incident_id}/acknowledge")
+    async def acknowledge(incident_id: int):
+        current(incident_id)
+        return check(await engine.acknowledge())
 
     @router.post("/api/incidents/{incident_id}/choose-helper")
     async def choose_helper(incident_id: int, body: Helper):

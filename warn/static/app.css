@@ -17,6 +17,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; display: flex; flex-direction: column; background: var(--concrete); color: var(--tarmac); font-family: var(--font); overflow: hidden; }
+[hidden] { display: none !important; }
 button, select { font: inherit; }
 button { font-weight: 700; cursor: pointer; border: 0; border-radius: 0; }
 button:focus-visible, select:focus-visible { outline: 3px solid var(--line); outline-offset: 2px; }
@@ -47,8 +48,8 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--line); out
 .log table { width: 100%; border-collapse: collapse; font-size: .88rem; }
 .log th { position: sticky; top: 0; text-align: left; padding: 5px 10px; background: var(--tarmac-soft); color: #b9c4c9; font-weight: 600; }
 .log td { padding: 4px 10px; border-top: 1px solid var(--tarmac-line); white-space: nowrap; }
-.log td.req { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .8rem; color: #cfd8dc; }
-.log td.res { white-space: normal; }
+.log td.req { max-width: 360px; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .8rem; color: #cfd8dc; }
+.log td.res { min-width: 240px; white-space: normal; }
 .log tr.fresh td { animation: fresh 2.4s ease-out; }
 @keyframes fresh { from { background: rgba(245, 188, 0, .3); } to { background: transparent; } }
 
@@ -108,8 +109,8 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--line); out
 .route { margin-bottom: 10px; padding: 12px; background: var(--white); border-left: 8px solid #8a979c; }
 .route.safer { border-left-color: var(--low); }
 .route h3 { margin: 0 0 6px; font-size: 1.05rem; }
-.route dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: .95rem; }
-.route dt { color: var(--tarmac-soft); } .route dd { margin: 0; font-weight: 700; text-align: right; }
+.route dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: .95rem; }
+.route dt { color: var(--tarmac-soft); white-space: nowrap; } .route dd { margin: 0; font-weight: 700; text-align: right; }
 .p-compare .actions { margin-top: auto; display: grid; gap: 8px; }
 .p-compare .btn-main { background: var(--tarmac); color: var(--white); }
 .p-compare .btn-ghost { background: #d3dada; color: var(--tarmac); }
@@ -119,10 +120,11 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--line); out
 .p-end .actions { margin-top: auto; }
 .p-end button { width: 100%; padding: 13px; background: var(--line); color: var(--tarmac); font-size: 1.05rem; }
 
+.place { transform: translate(-50%, -50%); color: #4b5b63; font-weight: 700; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; white-space: nowrap; pointer-events: none; }
 .car-pin { width: 22px; height: 22px; border-radius: 50%; background: var(--blue); border: 3px solid var(--white); box-shadow: 0 0 0 5px rgba(47, 111, 179, .35), 0 1px 4px rgba(0, 0, 0, .5); }
-.flag { padding: 2px 7px; background: var(--tarmac); color: var(--white); font: 700 .8rem var(--font); white-space: nowrap; border-radius: 3px; }
-.flag.split { background: var(--blue); }
-.zone-label { padding: 2px 7px; color: var(--white); font: 700 .8rem var(--font); white-space: nowrap; border-radius: 3px; }
+.flag, .zone-label { position: absolute; left: 0; top: 0; transform: translate(-50%, calc(-100% - 12px)); padding: 2px 7px; color: var(--white); font: 700 .8rem var(--font); white-space: nowrap; border-radius: 3px; }
+.flag { background: var(--tarmac); }
+.flag.split { background: var(--blue); transform: translate(-50%, 12px); }
 
 @media (max-width: 900px) {
   body { overflow: auto; }

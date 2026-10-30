@@ -82,7 +82,7 @@
         <button type="button" data-start="a">Scenario A: ambulance close</button>
         <button type="button" data-start="b">Scenario B: far, high severity</button>
         <button type="button" data-start="2">Scenario 2: no one around</button>
-        <button type="button" disabled title="Not built yet">Scenario 3: no network</button>
+        <button type="button" data-start="3">Scenario 3: no network</button>
       </div>
       <label class="auto"><input type="checkbox" id="auto"> Auto: if anyone is nearby a witness confirms, and a helper accepts by themselves. User 0 never answers.</label>
       <p class="muted" style="margin-top:12px" id="scenario-info">Press a scenario. The crash of user 0's car goes through the real pipeline: M2, then M3 and M4.</p>
@@ -173,10 +173,21 @@ function syncAnimation(s) {
   if (!car || car.runId !== sc.device_id) {
     // The blackbox starts right after the scenario does, with no lead-in: the impact comes 8 s in
     car = { runId: sc.device_id, kind: "crash", cruise: 20.3, color: "#3b82c4", ctx, scn: null, x: 0, fx: [], result: null, resultAt: 0,
-            impactDone: false, lastSmoke: 0, leadOn: true, idleText: "", scenarioAt: performance.now() - sc.elapsed_s * 1000 };
+            impactDone: false, lastSmoke: 0, leadOn: true, idleText: "",
+            // In scenario 3 the car drives first, and the crash starts once it is inside the zone
+            scenarioAt: sc.kind === "dead_zone" ? null : performance.now() - sc.elapsed_s * 1000 };
   }
+  if (s.dead_zone?.phase === "in_zone" && !car.scn && car.scenarioAt === null) car.scenarioAt = performance.now();
   const m2 = s.incident?.m2;
   if (m2 && !car.result) { car.result = m2; car.resultAt = performance.now(); }
+}
+
+function deadZoneCaption(dz) {
+  if (dz.phase === "driving") return "Driving towards the no-coverage zone. Everything still reaches the server.";
+  if (dz.phase === "turned_back") return "The driver turned back.";
+  if (dz.found) return "Help found the driver.";
+  if (dz.phase === "overdue") return "Not back in time. The server still knows nothing about the crash: help goes to the last known position.";
+  return dz.crashed ? "A crash in the zone. The blackbox keeps the data, but nothing reaches the server." : "In the zone: no network, so nothing reaches the server.";
 }
 
 function onSnapshot(s) {
@@ -194,7 +205,7 @@ function frame() {
     if (car.scenarioAt !== null && now >= car.scenarioAt) { car.scn = { startAt: car.scenarioAt, x0: car.x }; car.leadWasVisible = true; car.scenarioAt = null; }
     const p = update(car, now, dt);
     drawScene(car, now, p);
-    const [text, tone] = captionFor(car, p, now);
+    const [text, tone] = snap?.dead_zone ? [deadZoneCaption(snap.dead_zone), ""] : captionFor(car, p, now);
     if (captionEl.textContent !== text) captionEl.textContent = text;
     captionEl.dataset.tone = tone;
   } else {

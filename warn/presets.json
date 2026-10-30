@@ -3,7 +3,7 @@
     {
       "id": "calm",
       "name": "Calm drive",
-      "blurb": "Open two-lane national road RN18 at Tuesday 11h. M1 sees nothing worth a warning, so the phone stays quiet.",
+      "blurb": "Open two-lane national road RN18 at Tuesday 11h. M1 rates it 0.5x to 1x, so the phone stays quiet.",
       "clock": {
         "weekday": 1,
         "hour": 11,
@@ -27,7 +27,7 @@
     {
       "id": "village",
       "name": "Village crossing",
-      "blurb": "RN18 goes through Ain Laloui, about 1.2 km. A short stretch: the phone warns and does not suggest another route.",
+      "blurb": "RN18 goes through Ain Laloui at Tuesday 15h: a 1.4 km stretch rated 3x. Short, so the phone warns and does not look for another route.",
       "clock": {
         "weekday": 1,
         "hour": 15,
@@ -57,7 +57,7 @@
     {
       "id": "junction",
       "name": "Busy junction",
-      "blurb": "A built-up junction on RN18 at Friday 17h, 400 m long. The warning names the junction.",
+      "blurb": "A built-up junction at Said Abid on RN18, Friday 17h: 600 m rated 3x. The warning names the junction.",
       "clock": {
         "weekday": 4,
         "hour": 17,
@@ -87,7 +87,7 @@
     {
       "id": "bouira",
       "name": "Through Bouira",
-      "blurb": "Crossing Bouira at Friday 17h: a long risky stretch in the city. The phone scores the A2 motorway too and offers it.",
+      "blurb": "Crossing Bouira at Friday 17h: 3.6 km of city at 4-5x. The phone scores the A2 motorway too and offers it: 1.2x on average instead of 2.2x.",
       "clock": {
         "weekday": 4,
         "hour": 17,
@@ -138,7 +138,7 @@
     {
       "id": "night",
       "name": "Night on the open road",
-      "blurb": "A straight stretch of RN5 east of Bouira at Saturday 02h. By day M1 says 0.7x here, tonight 5x or more, and no other road is better.",
+      "blurb": "A straight stretch of RN5 east of Bouira at Saturday 02h. By day M1 says 0.6x here, tonight 5.7x, and there is no other road.",
       "clock": {
         "weekday": 5,
         "hour": 2,
@@ -168,7 +168,7 @@
     {
       "id": "mountain",
       "name": "Mountain at night",
-      "blurb": "The CW98 mountain road at Saturday 01h: bend after bend in the dark.",
+      "blurb": "The CW98 mountain road at Saturday 01h: 7x at the worst spot, with sharp bends in the dark. By day M1 says 1.4x.",
       "clock": {
         "weekday": 5,
         "hour": 1,
