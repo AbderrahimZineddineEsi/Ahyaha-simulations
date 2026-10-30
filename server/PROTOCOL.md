@@ -12,17 +12,19 @@ The server prints the full address when it starts. Both PCs must be on the same 
 
 Open `http://<server-ip>:8000/health` in a browser. You should see `"status":"ok"`.
 
-Then run the example simulator, which sends the ready-made messages in [examples/](examples/):
+Then start a blackbox. You need no files: one command per terminal, each with its own name. The server runs the blackbox and prints every packet in your terminal, one line per second, then the prediction:
 
 ```bash
-pip install websockets
-python example_client.py crash --url ws://<server-ip>:8000/ws/telemetry
-python example_client.py trigger_no_crash --url ws://<server-ip>:8000/ws/telemetry
+curl -N http://<server-ip>:8000/blackbox/blackbox-01/crash     # crash after 10 s of normal driving, then it ends
+curl -N http://<server-ip>:8000/blackbox/blackbox-02/braking   # hard braking, then normal driving until Ctrl+C
+curl -N http://<server-ip>:8000/blackbox/blackbox-03/normal    # normal driving until Ctrl+C
 ```
 
-Each run takes about 36 s and ends with one prediction: `level` `crash` for the first, `none` for the second. Add `--fast` to send without waiting. `python example_client.py normal` sends normal driving until you press Ctrl+C.
+A scenario takes about 26 s: `level` `crash` for the first, `none` for the second. On Windows PowerShell, write `curl.exe`.
 
-Whoever runs the server can watch all of this live at `http://localhost:8000/`: each second's status, the countdown after a trigger, and the prediction.
+The rest of this document is for building your own telemetry service over WebSocket.
+
+Whoever runs the server can watch all of this live at `http://localhost:8000/dev/monitor`: each second's status, the countdown after a trigger, and the prediction.
 
 ## The ready-made messages
 
@@ -34,7 +36,7 @@ Each file in [examples/](examples/) is a **list of 16 messages**, one per second
 | [crash.json](examples/crash.json) | A real crash. The trigger fires in message 8. | Trigger, a countdown from 7 s to 1 s, then `crash` |
 | [trigger_no_crash.json](examples/trigger_no_crash.json) | Hard braking. The trigger fires in message 8. | Trigger, the same countdown, then `none` |
 
-**Renumber `seq` before sending.** Every file counts from 0, but `seq` must keep going up for each car. Send `normal.json` on repeat as the base, and when a scenario starts, send it after at least 10 messages of normal driving, with the `seq` of every message continuing from the last one. A scenario sent straight after another, with `seq` back at 0, makes the server think the simulator restarted. [example_client.py](example_client.py) shows how: it stamps `device_id`, `seq` and `recorded_at` on each message just before sending it.
+**Renumber `seq` before sending.** Every file counts from 0, but `seq` must keep going up for each car. Send `normal.json` on repeat as the base, and when a scenario starts, send it after at least 10 messages of normal driving, with the `seq` of every message continuing from the last one. A scenario sent straight after another, with `seq` back at 0, makes the server think the simulator restarted. [blackbox_sim.py](blackbox_sim.py) shows how: it stamps `device_id`, `seq` and `recorded_at` on each message just before sending it.
 
 A full crash demo is: normal driving, then `crash.json`, then normal driving again. After the trigger's second the server waits 7 more seconds for the prediction, so keep sending.
 

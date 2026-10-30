@@ -1,0 +1,199 @@
+{
+  "presets": [
+    {
+      "id": "calm",
+      "name": "Calm drive",
+      "blurb": "Open two-lane national road RN18 at Tuesday 11h. M1 sees nothing worth a warning, so the phone stays quiet.",
+      "clock": {
+        "weekday": 1,
+        "hour": 11,
+        "month": 10
+      },
+      "route": [
+        [
+          36.32373,
+          3.7533
+        ],
+        [
+          36.34521,
+          3.83108
+        ]
+      ],
+      "alt": null,
+      "expect": {
+        "alerts": []
+      }
+    },
+    {
+      "id": "village",
+      "name": "Village crossing",
+      "blurb": "RN18 goes through Ain Laloui, about 1.2 km. A short stretch: the phone warns and does not suggest another route.",
+      "clock": {
+        "weekday": 1,
+        "hour": 15,
+        "month": 10
+      },
+      "route": [
+        [
+          36.3149,
+          3.70322
+        ],
+        [
+          36.33159,
+          3.78933
+        ]
+      ],
+      "alt": null,
+      "expect": {
+        "alerts": [
+          {
+            "type": "town",
+            "long": false,
+            "button": "none"
+          }
+        ]
+      }
+    },
+    {
+      "id": "junction",
+      "name": "Busy junction",
+      "blurb": "A built-up junction on RN18 at Friday 17h, 400 m long. The warning names the junction.",
+      "clock": {
+        "weekday": 4,
+        "hour": 17,
+        "month": 10
+      },
+      "route": [
+        [
+          36.3326,
+          3.787
+        ],
+        [
+          36.3591,
+          3.84816
+        ]
+      ],
+      "alt": null,
+      "expect": {
+        "alerts": [
+          {
+            "type": "junction",
+            "long": false,
+            "button": "none"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bouira",
+      "name": "Through Bouira",
+      "blurb": "Crossing Bouira at Friday 17h: a long risky stretch in the city. The phone scores the A2 motorway too and offers it.",
+      "clock": {
+        "weekday": 4,
+        "hour": 17,
+        "month": 10
+      },
+      "route": [
+        [
+          36.3591,
+          3.8482
+        ],
+        [
+          36.3727,
+          3.8916
+        ],
+        [
+          36.3741,
+          3.9059
+        ],
+        [
+          36.3352,
+          3.9557
+        ]
+      ],
+      "alt": [
+        [
+          36.3591,
+          3.8482
+        ],
+        [
+          36.3668,
+          3.8713
+        ],
+        [
+          36.3352,
+          3.9557
+        ]
+      ],
+      "expect": {
+        "alerts": [
+          {
+            "type": "town",
+            "long": true,
+            "button": "reroute"
+          }
+        ]
+      }
+    },
+    {
+      "id": "night",
+      "name": "Night on the open road",
+      "blurb": "A straight stretch of RN5 east of Bouira at Saturday 02h. By day M1 says 0.7x here, tonight 5x or more, and no other road is better.",
+      "clock": {
+        "weekday": 5,
+        "hour": 2,
+        "month": 10
+      },
+      "route": [
+        [
+          36.3363,
+          3.9424
+        ],
+        [
+          36.3261,
+          3.9987
+        ]
+      ],
+      "alt": null,
+      "expect": {
+        "alerts": [
+          {
+            "type": "night_road",
+            "long": true,
+            "button": "no-safer"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mountain",
+      "name": "Mountain at night",
+      "blurb": "The CW98 mountain road at Saturday 01h: bend after bend in the dark.",
+      "clock": {
+        "weekday": 5,
+        "hour": 1,
+        "month": 10
+      },
+      "route": [
+        [
+          36.3516,
+          4.1908
+        ],
+        [
+          36.4243,
+          4.2015
+        ]
+      ],
+      "alt": null,
+      "expect": {
+        "alerts": [
+          {
+            "type": "night_bends",
+            "long": true,
+            "button": "no-safer"
+          }
+        ]
+      }
+    }
+  ]
+}

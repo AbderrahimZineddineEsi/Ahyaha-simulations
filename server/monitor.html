@@ -4,204 +4,68 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SolveX monitor</title>
-<style>
-  /* System fonts only: the demo has to work with no internet */
-  :root {
-    --tarmac: #24343d;
-    --tarmac-soft: #3a4c56;
-    --concrete: #e6eaea;
-    --line: #f5bc00;
-    --alarm: #c8231b;
-    --clear: #17785a;
-    --white: #ffffff;
-    --font: "Bahnschrift", "DIN Alternate", "Barlow", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    background: var(--concrete);
-    color: var(--tarmac);
-    font-family: var(--font);
-    display: flex;
-    flex-direction: column;
-  }
-  header {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 14px 32px;
-    font-size: 1.05rem;
-  }
-  #link[data-up="false"] { color: var(--alarm); font-weight: 700; }
-  main { flex: 1; display: flex; flex-direction: column; }
-
-  .empty { padding: 32px; font-size: 1.5rem; max-width: 34em; line-height: 1.4; }
-  .empty code { font-size: .85em; }
-
-  .car {
-    flex: 1;
-    padding: 28px 32px 32px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 22px;
-    background: var(--tarmac);
-    color: var(--white);
-    transition: background-color .25s;
-  }
-  .car + .car { border-top: 6px solid var(--concrete); }
-  .car[data-mood="collecting"] { background: var(--line); color: var(--tarmac); }
-  .car[data-mood="alarm"] { background: var(--alarm); }
-  .car[data-mood="clear"] { background: var(--clear); }
-  .car[data-mood="stale"] { background: var(--tarmac-soft); }
-
-  .who { display: flex; justify-content: space-between; gap: 16px; font-size: 1.15rem; }
-  .headline {
-    margin: 0;
-    font-size: clamp(2.6rem, 8vw, 6.5rem);
-    line-height: 1;
-    font-weight: 700;
-    letter-spacing: -.01em;
-  }
-  .detail { margin: 0; font-size: clamp(1.15rem, 2.4vw, 1.7rem); min-height: 1.3em; }
-
-  /* The 16 seconds M2 reads. The yellow line is the trigger */
-  .tape { display: grid; grid-template-columns: repeat(8, 1fr) 8px repeat(8, 1fr); gap: 4px; }
-  .tape i {
-    display: block;
-    height: clamp(30px, 7vh, 64px);
-    background: currentColor;
-    opacity: .16;
-  }
-  .tape i.held { opacity: 1; }
-  .tape .trigger { background: var(--line); opacity: 1; }
-  .car[data-mood="collecting"] .tape .trigger { background: var(--tarmac); }
-  .tape-labels { display: flex; justify-content: space-between; font-size: 1.05rem; margin-top: 6px; }
-
-  .history { margin: 0; padding: 0; list-style: none; font-size: 1.05rem; line-height: 1.5; }
-
-  @media (max-width: 600px) {
-    header, .car { padding-left: 16px; padding-right: 16px; }
-    .empty { padding: 16px; }
-  }
-  @media (prefers-reduced-motion: reduce) { .car { transition: none; } }
-</style>
+<link rel="stylesheet" href="/static/panel.css">
 </head>
 <body>
 <header>
   <span>SolveX crash monitor</span>
-  <span id="link" data-up="false" role="status">Connecting to the server</span>
+  <nav>
+    <span id="link" data-up="false" role="status">Connecting to the server</span>
+    <a href="/dev/live" target="_blank" rel="noopener">Open the live view</a>
+    <a href="/dev/simulator" target="_blank" rel="noopener">Open the simulator</a>
+    <button id="reset-all" type="button">Reset all</button>
+  </nav>
 </header>
 <main id="cars">
   <p class="empty" id="empty">No car is sending data yet. Start the telemetry service, and each car appears here.</p>
 </main>
 
+<script src="/static/common.js"></script>
+<script src="/static/panel.js"></script>
 <script>
-const STALE_MS = 3500;    // a car is sending once a second
-const RESULT_MS = 6000;   // how long a no-crash result stays on screen
-const WORDS = {
-  crash: "Crash detected",
-  likely: "Likely crash",
-  possible: "Possible crash",
-  none: "No crash",
-};
-const LATCHED = new Set(["crash", "likely"]);  // stay on screen until the next trigger
-
 const cars = new Map();
 const main = document.getElementById("cars");
 const link = document.getElementById("link");
+const empty = document.getElementById("empty");
+
+function removeCar(id) {
+  cars.get(id)?.el.remove();
+  cars.delete(id);
+  if (!cars.size) main.append(empty);
+}
+
+function clearCars() {
+  [...cars.keys()].forEach(removeCar);
+}
+
+document.getElementById("reset-all").addEventListener("click", async () => {
+  const response = await fetch("/api/reset", { method: "POST" }).catch(() => null);
+  if (!response?.ok) link.textContent = "Reset failed. Restart the server.";
+});
 
 function addCar(id) {
-  const el = document.createElement("section");
-  el.className = "car";
-  el.innerHTML = `
-    <div class="who"><span class="name"></span><span class="reading"></span></div>
-    <h1 class="headline"></h1>
-    <p class="detail"></p>
-    <div>
-      <div class="tape"></div>
-      <div class="tape-labels"><span>8 s before the trigger</span><span>8 s after</span></div>
-    </div>
-    <ul class="history"></ul>`;
-  el.querySelector(".name").textContent = id;
-  const tape = el.querySelector(".tape");
-  const cells = [];
-  for (let i = 0; i < 17; i++) {
-    const cell = document.createElement("i");
-    if (i === 8) cell.className = "trigger"; else cells.push(cell);
-    tape.append(cell);
-  }
-  document.getElementById("empty")?.remove();
-  main.append(el);
-  const car = { el, cells, status: null, result: null, resultAt: 0, seenAt: 0, history: [] };
+  const car = createPanel(id);
+  empty.remove();
+  main.append(car.el);
   cars.set(id, car);
   return car;
 }
 
-function percent(p) {
-  return p >= 0.9995 ? "over 99.9%" : p < 0.001 ? "under 0.1%" : `${(p * 100).toFixed(1)}%`;
-}
-
-function render(car) {
-  const { el, status, result, resultAt, seenAt, cells } = car;
-  const now = Date.now();
-  const stale = now - seenAt > STALE_MS;
-  const collecting = status?.state === "collecting" && !stale;
-  const showResult = result && !collecting && (LATCHED.has(result.level) || now - resultAt < RESULT_MS);
-
-  let mood = "watching", headline = "No trigger detected", detail = "Watching every second of data";
-  let held = 0;
-  if (collecting) {
-    mood = "collecting";
-    headline = `Trigger: collecting ${status.remaining_s} s`;
-    detail = `Holding the previous ${status.before_s} s. Prediction in ${status.remaining_s} s.`;
-    held = status.before_s + (8 - status.remaining_s);
-  } else if (showResult) {
-    mood = LATCHED.has(result.level) ? "alarm" : "clear";
-    headline = WORDS[result.level];
-    detail = `Crash chance ${percent(result.p_crash)}.`;
-    if (result.filled_s > 0) detail += ` ${result.filled_s} s of the window never arrived.`;
-    held = 16;
-  } else if (stale) {
-    mood = "stale";
-    headline = "No data from this car";
-    detail = "The last message arrived over 3 s ago";
-  }
-
-  el.dataset.mood = mood;
-  el.querySelector(".headline").textContent = headline;
-  el.querySelector(".detail").textContent = detail;
-  el.querySelector(".reading").textContent = status ? `Second ${status.seq}, peak ${status.peak_g.toFixed(2)} g` : "";
-  cells.forEach((cell, i) => cell.classList.toggle("held", i < held));
-  el.querySelector(".history").replaceChildren(...car.history.slice(0, 3).map(text => {
-    const li = document.createElement("li");
-    li.textContent = text;
-    return li;
-  }));
-}
-
 function onMessage(m) {
-  const car = cars.get(m.device_id) ?? addCar(m.device_id);
-  car.seenAt = Date.now();
-  if (m.type === "status") {
-    car.status = m;
-  } else if (m.type === "prediction") {
-    const key = m.prediction_id;
-    if (car.result?.prediction_id !== key) {
-      car.history.unshift(`Trigger at second ${m.trigger_seq}: ${WORDS[m.level].toLowerCase()}, ${percent(m.p_crash)}`);
-    }
-    car.result = m;
-    car.resultAt = Date.now();
-    car.status = { ...car.status, state: "watching" };
-  }
-  render(car);
+  if (m.type === "reset") return clearCars();
+  if (m.type === "car_removed") return removeCar(m.device_id);
+  if (m.type !== "status" && m.type !== "prediction") return;
+  applyToPanel(cars.get(m.device_id) ?? addCar(m.device_id), m);
 }
 
 function connect() {
   const scheme = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${scheme}://${location.host}/ws/monitor`);
-  ws.onopen = () => { link.textContent = "Connected to the server"; link.dataset.up = "true"; };
+  ws.onopen = () => {  // the server replays its current cars, so anything left on the page is out of date
+    clearCars();
+    link.textContent = "Connected to the server";
+    link.dataset.up = "true";
+  };
   ws.onmessage = e => onMessage(JSON.parse(e.data));
   ws.onclose = () => {
     link.textContent = "Server not reachable. Retrying.";
