@@ -40,10 +40,10 @@ The Hugging Face repo is private for now, so you need access to it: run `hf auth
 
 ```bash
 python server/app.py
-python server/example_client.py    # in a second terminal, to test it
+python server/example_client.py crash    # in a second terminal, to test it
 ```
 
-A simulated blackbox connects over WebSocket, sends a 16 s telemetry window and gets M2's prediction back. The server prints the address to give to the other PC. [server/PROTOCOL.md](server/PROTOCOL.md) documents the request and the response.
+A simulated blackbox streams one second of telemetry at a time over WebSocket. The server saves every second to `server/solvex.db` and checks it for a trigger (1 g on x-y). When one fires, M2 scores the 8 s before and the 8 s after it. The server prints the address to give to the other PC. [server/PROTOCOL.md](server/PROTOCOL.md) documents the messages and the scenarios.
 
 ## Repository layout
 
@@ -60,8 +60,8 @@ m2/  crash detection  m2_blackbox.py (signal code, shared with the backend)
                       build_m2_notebook.py (regenerates the notebook)
 m3/  severity         train_m3.ipynb, build_m3_dataset.py
 m4/  injury map       train_m4.ipynb, build_m4_dataset.py
-server/               WebSocket server: app.py, m2_model.py, PROTOCOL.md (the request format),
-                      example_client.py, examples/ (real windows to send)
+server/               WebSocket server: app.py, stream.py (trigger and windows), database.py, m2_model.py,
+                      PROTOCOL.md (the messages), example_client.py, examples/ (recordings to replay)
 archive/              early notes and the first version of the plan
 ```
 
