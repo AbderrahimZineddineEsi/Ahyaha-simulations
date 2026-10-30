@@ -17,3 +17,6 @@ m*/raw/
 archive/Probl*.pdf
 archive/Serious injury prediction*.pdf
 archive/gcpi_a_*.docx
+
+# Server database
+server/*.db*
