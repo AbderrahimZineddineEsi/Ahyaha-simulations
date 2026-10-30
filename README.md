@@ -21,7 +21,7 @@ One crash goes from raw signals through M2, M3 and M4 in about 8 ms on one lapto
 - M1: fix the missing-data flaw, and build the OpenStreetMap and weather lookups
 - `crash_summary()`: fix ΔV underestimates and the `multi_impact` threshold
 - Phone-side crash detection, and the confidence ladder that combines all signals
-- A backend AI API serving the four models (M2 is live over WebSocket in `server/`; M1, M3 and M4 aren't yet)
+- M1 on the backend (M2, M3 and M4 run in `backend/`; M1 runs on the phone and is demoed in `warn/`)
 - The profile rule (pregnancy, heart disease, blood thinners raise M3 by one level)
 
 ## Getting started
@@ -36,10 +36,10 @@ The Hugging Face repo is private for now, so you need access to it: run `hf auth
 
 [MODEL_SPEC.md](MODEL_SPEC.md#using-the-models) has code that runs all four models.
 
-## Running the server
+## Running the backend
 
 ```bash
-python server/app.py
+python -m backend.main
 curl -N http://localhost:8000/blackbox/blackbox-01/crash    # in a second terminal, to test it
 ```
 
@@ -47,8 +47,9 @@ The pages:
 
 | Address | What it is |
 |---|---|
-| `http://localhost:8000/` | **Protection Civile dashboard**: the agent's view of a crash. Map, timeline, severity, ambulances, helpers. |
-| `http://localhost:8000/dev` | **Dev screen**: start a scenario (A, B, 2 or 3), six clickable phones, the crash animation, the event log. See [server/DEMO.md](server/DEMO.md). |
+| `http://localhost:8000/` | **Protection Civile dashboard** (log in; the demo prefills the agent): every open incident, with map, timeline, severity, ambulances, helpers, hospital. |
+| `http://localhost:8000/docs` | The API, from OpenAPI. [backend/API.md](backend/API.md) explains how it fits together. |
+| `http://localhost:8000/dev` | **Dev screen**: start a scenario (A, B, 2 or 3), six clickable phones, the crash animation, the event log. See [backend/DEMO.md](backend/DEMO.md). |
 | `http://localhost:8000/dev/monitor` | Telemetry monitor: each car's status and the 8 s countdown |
 | `http://localhost:8000/dev/live` | Live view: a blackbox started with `curl`, as an animation next to its detection panel |
 | `http://localhost:8000/dev/simulator` | Three cars on a 2D map that stream real telemetry from the browser |
@@ -57,7 +58,7 @@ From a terminal, `curl -N http://localhost:8000/dev/run/a` (or `b`, `2`, `3`) st
 
 **Reset all**, on the dashboard-side pages (`/dev`, `/dev/monitor`, `/dev/live`, `/dev/simulator`), clears every car, the response in progress, and stops the blackboxes started by `curl`. The database keeps its history. A car that stops sending leaves the monitor after 30 s, unless it crashed.
 
-A simulated blackbox streams one second of telemetry at a time over WebSocket. The server saves every second to `server/solvex.db` and checks it for a trigger (1 g on x-y). When one fires, M2 scores the 8 s before and the 8 s after it. The server prints the address to give to the other PC. [server/PROTOCOL.md](server/PROTOCOL.md) documents the messages and the scenarios.
+A simulated blackbox streams one second of telemetry at a time over WebSocket. The server saves every second to `backend/solvex.db` and checks it for a trigger (1 g on x-y). When one fires, M2 scores the 8 s before and the 8 s after it. The server prints the address to give to the other PC. [backend/PROTOCOL.md](backend/PROTOCOL.md) documents the messages and the scenarios, and [backend/README.md](backend/README.md) the backend: its layout, the rules, the tests.
 
 ## Repository layout
 
@@ -74,12 +75,10 @@ m2/  crash detection  m2_blackbox.py (signal code, shared with the backend)
                       build_m2_notebook.py (regenerates the notebook)
 m3/  severity         train_m3.ipynb, build_m3_dataset.py
 m4/  injury map       train_m4.ipynb, build_m4_dataset.py
-server/               WebSocket server: app.py, stream.py (trigger and windows), database.py, m2_model.py,
-                      dashboard.html, dev.html, monitor.html, simulator.html, live.html, static/ (the web pages),
-                      incident.py (the response: states, notifications, ambulances), severity.py (M3 and M4),
-                      demo_data.py (people, ambulances, scenarios), world.py (routes), ops.py (the dashboard's endpoints),
-                      tools/fetch_map.py (one-off: routes and streets for the map), PROTOCOL.md (the messages),
-                      blackbox_sim.py (blackboxes started by a request), examples/ (ready-to-send messages)
+backend/              FastAPI + Socket.IO: telemetry, M2/M3/M4, incidents, notifications, ambulances, dead-zone check-ins,
+                      hospitals, accounts. API.md (for the app developer), PROTOCOL.md (the blackbox's messages),
+                      DEMO.md, sim/ (the demo: seed data, scenarios, /dev, /blackbox), web/ (the pages), tests/
+warn/                 the M1 road-risk warning demo on a phone (its own server, port 8001)
 archive/              early notes and the first version of the plan
 ```
 
