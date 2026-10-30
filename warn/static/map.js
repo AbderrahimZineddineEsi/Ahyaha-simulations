@@ -2,7 +2,11 @@
 // The left side: the car on the map, and the road coloured only where the phone has already scanned it.
 const MapView = (() => {
   const COLORS = { low: "#5aa583", medium: "#e8c547", high: "#ee8a2b", "very high": "#c8231b" };
-  const EMPTY_TILE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  // Streets by class (0 motorway, 1 national, 2 secondary, 3 local): drawn from saved OpenStreetMap data, no tiles
+  const STREET_STYLE = [
+    { color: "#e9a23b", weight: 4 }, { color: "#f2cf79", weight: 3.5 }, { color: "#ffffff", weight: 3 }, { color: "#ffffff", weight: 1.6 },
+  ];
+  const PLACE_SIZE = ["1.05rem", ".95rem", ".8rem"];
   let map = null, car = null;
   const legs = {};            // leg -> {path, cum, length}
   const painted = {};         // leg -> Map(segment start -> polyline)
@@ -10,11 +14,34 @@ const MapView = (() => {
   let zones = new Map();      // alert -> layers
   let altLine = null;
 
-  function init() {
-    map = L.map("map", { zoomControl: true, attributionControl: true, minZoom: 11, maxZoom: 17 });
-    L.tileLayer("/static/map/{z}/{x}/{y}.png", { minZoom: 11, maxZoom: 17, maxNativeZoom: 15, errorTileUrl: EMPTY_TILE,
-                                                 attribution: "© OpenStreetMap contributors" }).addTo(map);
+  async function init() {
+    map = L.map("map", { zoomControl: true, attributionControl: true, minZoom: 10, maxZoom: 17, preferCanvas: true });
+    map.attributionControl.addAttribution("Streets © OpenStreetMap contributors");
     map.setView([36.37, 3.9], 12);
+    document.getElementById("map").style.background = "#e4e8e6";
+    try {
+      const streets = await fetch("/static/streets.json").then((r) => r.json());
+      drawStreets(streets);
+    } catch (e) { /* no street data: the route and the car still show */ }
+  }
+
+  function drawStreets({ ways, places }) {
+    map.createPane("streets").style.zIndex = 350;      // under the route, whenever the data arrives
+    const canvas = L.canvas({ padding: 0.3, pane: "streets" });
+    const base = L.layerGroup().addTo(map);
+    // smallest first so the big roads end up on top
+    for (const cls of [3, 2, 1, 0]) {
+      for (const [c, pts] of ways) {
+        if (c !== cls) continue;
+        L.polyline(pts, { ...STREET_STYLE[cls], renderer: canvas, interactive: false, lineCap: "round", lineJoin: "round" }).addTo(base);
+      }
+    }
+    for (const [name, lat, lon, kind] of places) {
+      L.marker([lat, lon], {
+        icon: L.divIcon({ className: "", html: `<div class="place" style="font-size:${PLACE_SIZE[kind]}">${name.replace(/[<>&]/g, "")}</div>`, iconSize: [0, 0] }),
+        interactive: false, keyboard: false,
+      }).addTo(base);
+    }
   }
 
   function metres(a, b) {
@@ -66,16 +93,16 @@ const MapView = (() => {
 
     const roadLine = (pts, opts) => L.polyline(pts, { lineCap: "round", lineJoin: "round", interactive: false, ...opts }).addTo(layer);
     roadLine(legs.main.path, { color: "#fff", weight: 11, opacity: 0.95 });
-    roadLine(legs.main.path, { color: "#8a979c", weight: 6 });
+    roadLine(legs.main.path, { color: "#4f6068", weight: 6 });
     altLine = null;
     if (preset.alt) {
       altLine = roadLine(legs.alt.path, { color: "#2f6fb3", weight: 4, opacity: 0.55, dashArray: "2 9" });
       const at = positionOf("main", preset.branch_m);
-      L.marker(at, { icon: L.divIcon({ className: "", html: '<div class="flag split">Other route leaves here</div>', iconSize: [150, 20], iconAnchor: [75, -6] }), interactive: false }).addTo(layer);
+      L.marker(at, { icon: L.divIcon({ className: "", html: '<div class="flag split">Other route leaves here</div>', iconSize: [0, 0] }), interactive: false }).addTo(layer);
     }
     const end = legs.main.path[legs.main.path.length - 1];
-    L.marker(legs.main.path[0], { icon: L.divIcon({ className: "", html: '<div class="flag">Start</div>', iconSize: [44, 20], iconAnchor: [22, 28] }), interactive: false }).addTo(layer);
-    L.marker(end, { icon: L.divIcon({ className: "", html: '<div class="flag">Destination</div>', iconSize: [80, 20], iconAnchor: [40, 28] }), interactive: false }).addTo(layer);
+    L.marker(legs.main.path[0], { icon: L.divIcon({ className: "", html: '<div class="flag">Start</div>', iconSize: [0, 0] }), interactive: false }).addTo(layer);
+    L.marker(end, { icon: L.divIcon({ className: "", html: '<div class="flag">Destination</div>', iconSize: [0, 0] }), interactive: false }).addTo(layer);
     car = L.marker(legs.main.path[0], { icon: L.divIcon({ className: "", html: '<div class="car-pin"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }), zIndexOffset: 1000, interactive: false }).addTo(layer);
     const all = legs.main.path.concat(preset.alt ? legs.alt.path : []);
     map.fitBounds(L.latLngBounds(all), { padding: [50, 50] });
@@ -100,7 +127,7 @@ const MapView = (() => {
     const band = L.polyline(slice(alert.leg, alert.a, alert.b), { color, weight: 18, opacity: 0.28, lineCap: "butt", interactive: false }).addTo(layer);
     const text = PhoneUI.COPY[alert.type].title;
     const label = L.marker(positionOf(alert.leg, (alert.a + alert.b) / 2), {
-      icon: L.divIcon({ className: "", html: `<div class="zone-label" style="background:${color}">${text} · ${PhoneUI.fmtKm(alert.b - alert.a)}</div>`, iconSize: [190, 20], iconAnchor: [95, 30] }),
+      icon: L.divIcon({ className: "", html: `<div class="zone-label" style="background:${color}">${text} · ${PhoneUI.fmtKm(alert.b - alert.a)}</div>`, iconSize: [0, 0] }),
       interactive: false,
     }).addTo(layer);
     zones.set(alert, [band, label]);
@@ -111,7 +138,13 @@ const MapView = (() => {
     zones.delete(alert);
   }
 
+  // After the driver leaves the main road, what the phone had scanned beyond the branch fades
+  function dimMainAfter(branch_m) {
+    painted.main.forEach((line, start) => { if (start >= branch_m) line.setStyle({ opacity: 0.3 }); });
+    for (const alert of [...zones.keys()]) if (alert.leg === "main" && alert.a >= branch_m) removeZone(alert);
+  }
+
   function emphasizeAlternative() { if (altLine) altLine.setStyle({ opacity: 1, weight: 6, dashArray: null }); }
 
-  return { init, load, moveCar, paint, addZone, removeZone, positionOf, emphasizeAlternative, invalidate: () => map && map.invalidateSize() };
+  return { init, load, moveCar, paint, addZone, removeZone, positionOf, emphasizeAlternative, dimMainAfter, invalidate: () => map && map.invalidateSize() };
 })();

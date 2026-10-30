@@ -52,10 +52,28 @@ To show the victim's side, press a button on user 0's phone during the run:
 - **Voice SOS:** the crash is verified, and the agent's call is answered.
 - **I'm OK:** confidence still stays high.
 
+## Scenario 3, no network, no one around
+
+No crash signal can reach us in a dead zone, so the safety net comes first: the driver says when they'll be back, and the agent decides what to do before the signal goes. The map shows the zone in grey.
+
+1. On `/dev`, press **Scenario 3**. The app asks user 0 when they expect to be back (15 s to answer). With no answer, it uses the route's ETA.
+2. **A pop-up opens on the dashboard:** Karim is heading into a no-coverage zone, expected back by a given time. There's about half a minute before the signal goes. The agent can:
+   - **Call Karim** (the call connects: he still has network).
+   - **Warn them not to go.** The phone offers Turn back or Continue anyway.
+   - **Tell them help can't reach them.**
+   - **OK, keep watching.**
+3. **If the driver turns back** (press it on their phone): the incident ends there.
+4. **If they go in:** the signal drops. The telemetry stops, the map keeps the last known position, the Call button can't connect, and no warning can reach them.
+5. **In the zone** the car crashes. The `/dev` screen shows it, but the dashboard can't: **the agent sees nothing**, which is the point.
+6. **When the return time passes:** a red pop-up. The emergency contact is warned first, then the Gendarmerie, with the last position, route and car description.
+7. On the panel, **Call for help** and **Dispatch**: the help heads past the last known position, along the planned route.
+8. The first to arrive finds Karim. Only then does the agent learn it was a crash.
+
 ## Notes for the pitch
 
 - The blackbox recording is the same in every scenario, so it can't give different severities. Each scenario uses a **real crash case from the NHTSA CISS database**, run through M3 and M4. Say so if asked: the blackbox's own ΔV measurement is shown in the dev log, and is not used yet.
 - The ambulance's drive is compressed (30 s for A, 60 s for B); the ETA shows real minutes.
 - Phone numbers and people are fictional. The map's streets come from OpenStreetMap.
 - Voice SOS is a button here. In the app it is a spoken phrase (Vosk), which isn't built yet. There is no phone line either: Call is a mock.
-- Scenario 3 (no network) and the hospital view are not built yet.
+- In scenario 3 the return time is compressed: the 30 s in the zone stand for the hour the driver promised. The grey zone is made up; in the real app it comes from OpenCelliD and our users' signal logs. Calling the Gendarmerie is a timeline line, not a real alert.
+- The hospital view is not built yet.

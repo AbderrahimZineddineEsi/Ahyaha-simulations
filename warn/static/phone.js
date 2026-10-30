@@ -182,7 +182,7 @@ const PhoneUI = (() => {
     if (alert.noSafer) {
       safer = alert.noAlternative
         ? `<p class="nosafer"><b>No other route from here.</b> Slow down and keep going carefully.</p>`
-        : `<p class="nosafer"><b>No safer road.</b> I checked the other route: it has ${fmtKm(alert.compare.alt.riskyKm * 1000)} of high risk against ${fmtKm(alert.compare.main.riskyKm * 1000)} here. Slow down instead.</p>`;
+        : `<p class="nosafer"><b>No safer road.</b> I checked the other route: it averages ${fmtX(alert.compare.alt.avgX)} against ${fmtX(alert.compare.main.avgX)} here. Slow down instead.</p>`;
     }
     return `${icon(alert.type, "big")}<h2>${c.title}</h2>` +
            `<p class="where">${levelWord(alert)} · ${alert.a > 0 && alert.startsIn > 0 ? "in " + fmtKm(alert.startsIn) + " · " : ""}${fmtKm(alert.length)} long</p>` +
@@ -195,7 +195,8 @@ const PhoneUI = (() => {
   function show(alert, handlers) {
     const entry = { alert, handlers, el: null, timer: null };
     live.set(alert, entry);
-    if (alert.level === "very high") {
+    const fullUp = [...live.values()].some((e) => e.full);
+    if (alert.level === "very high" && !fullUp) {
       const full = $("p-full");
       full.dataset.level = alert.level;
       full.innerHTML = fullHTML(alert);
@@ -248,9 +249,9 @@ const PhoneUI = (() => {
     const o = alert.offer, el = $("p-compare");
     const extra = Math.round(o.alt.minutes - o.main.minutes);
     const extraText = extra === 0 ? "same time" : extra > 0 ? `+${extra} min` : `${extra} min`;
-    el.innerHTML = `<h2>Safer route found</h2><p>M1 scored both routes from where they part, at this hour. The other road cuts the high-risk km by ${Math.round(o.cut * 100)}%.</p>` +
-      `<div class="route"><h3>Current route</h3><dl><dt>High-risk road</dt><dd>${o.main.riskyKm.toFixed(1)} km</dd><dt>Distance</dt><dd>${o.main.km.toFixed(1)} km</dd><dt>Time</dt><dd>${Math.round(o.main.minutes)} min</dd></dl></div>` +
-      `<div class="route safer"><h3>Safer route</h3><dl><dt>High-risk road</dt><dd>${o.alt.riskyKm.toFixed(1)} km</dd><dt>Distance</dt><dd>${o.alt.km.toFixed(1)} km</dd><dt>Time</dt><dd>${Math.round(o.alt.minutes)} min (${extraText})</dd></dl></div>` +
+    el.innerHTML = `<h2>Safer route found</h2><p>M1 scored both routes from where they part, at this hour. Weighted by distance, the other road carries ${Math.round(o.cut * 100)}% less risk.</p>` +
+      `<div class="route"><h3>Current route</h3><dl><dt>Average risk</dt><dd>${fmtX(o.main.avgX)}</dd><dt>High-risk road</dt><dd>${o.main.riskyKm.toFixed(1)} km</dd><dt>Distance · time</dt><dd>${o.main.km.toFixed(1)} km · ${Math.round(o.main.minutes)} min</dd></dl></div>` +
+      `<div class="route safer"><h3>Safer route</h3><dl><dt>Average risk</dt><dd>${fmtX(o.alt.avgX)}</dd><dt>High-risk road</dt><dd>${o.alt.riskyKm.toFixed(1)} km</dd><dt>Distance · time</dt><dd>${o.alt.km.toFixed(1)} km · ${Math.round(o.alt.minutes)} min (${extraText})</dd></dl></div>` +
       `<div class="actions"><button class="btn-main" data-act="take" type="button">Take the safer route</button><button class="btn-ghost" data-act="keep" type="button">Keep the current route</button></div>`;
     el.hidden = false;
     $("p-full").hidden = true;

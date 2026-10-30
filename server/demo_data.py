@@ -71,6 +71,26 @@ SCENARIOS = {
         "case_source": "CISS 2021 case 2021_1-73-2021-056-08_1_1: dv 50 km/h, frontal, several impacts. The real person had a serious injury (MAIS 3) and survived.",
         "expect": "high",
     },
+    "3": {
+        "title": "3: no network, no one around",
+        "traffic": 1.0,
+        "trip_s": 60,
+        "helper_trip_s": 25,
+        "place": "remote",
+        "kind": "dead_zone",   # no crash signal can arrive: no severity case either
+    },
+}
+
+# Scenario 3: the driver heads into a stretch of road with no network. Distances are back from the end of the road.
+DEAD_ZONE = {
+    "road": "RN 8B",
+    "start_m": 13000, "entry_m": 6000,   # where the driver starts, and where the signal is lost
+    "ask_s": 3,          # when the app asks about the return (the spec: about 15 min before the zone)
+    "drive_s": 40,       # seconds on screen until the driver reaches the zone
+    "crash_after_s": 8,  # in the zone, unseen by the server
+    "overdue_after_s": 30,   # the promised return time, compressed
+    "back": {"1h": ("In 1 hour", 60), "eta30": ("ETA + 30 min", 55), "long": ("Longer stay, 3 hours", 180)},
+    "default": "eta30",  # with no answer, the app uses the route's ETA
 }
 
 PARKED_SPREAD = {"town": 1, "remote": 4}  # the remote map is more zoomed out: parked ambulances need more room to show apart

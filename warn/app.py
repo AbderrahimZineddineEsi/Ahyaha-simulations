@@ -34,7 +34,11 @@ def load():
     roads_file = HERE / "roads.json"
     if not roads_file.exists():
         sys.exit("warn/roads.json is missing: run python warn/tools/build_roads.py")
-    return presets, json.loads(roads_file.read_text())
+    roads = json.loads(roads_file.read_text())
+    missing = [p["id"] for p in presets if p["id"] not in roads]
+    if missing:
+        print(f"No road data for {', '.join(missing)}: left out. Run python warn/tools/build_roads.py --only <id>")
+    return [p for p in presets if p["id"] in roads], roads
 
 
 def ensure_model():

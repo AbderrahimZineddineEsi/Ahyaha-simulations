@@ -48,12 +48,12 @@ The pages:
 | Address | What it is |
 |---|---|
 | `http://localhost:8000/` | **Protection Civile dashboard**: the agent's view of a crash. Map, timeline, severity, ambulances, helpers. |
-| `http://localhost:8000/dev` | **Dev screen**: start scenario A, B or 2, six clickable phones, the crash animation, the event log. See [server/DEMO.md](server/DEMO.md). |
+| `http://localhost:8000/dev` | **Dev screen**: start a scenario (A, B, 2 or 3), six clickable phones, the crash animation, the event log. See [server/DEMO.md](server/DEMO.md). |
 | `http://localhost:8000/dev/monitor` | Telemetry monitor: each car's status and the 8 s countdown |
 | `http://localhost:8000/dev/live` | Live view: a blackbox started with `curl`, as an animation next to its detection panel |
 | `http://localhost:8000/dev/simulator` | Three cars on a 2D map that stream real telemetry from the browser |
 
-From a terminal, `curl -N http://localhost:8000/dev/run/a` (or `b`, or `2`) starts that scenario and prints the packets.
+From a terminal, `curl -N http://localhost:8000/dev/run/a` (or `b`, `2`, `3`) starts that scenario and prints the packets.
 
 **Reset all**, on the dashboard-side pages (`/dev`, `/dev/monitor`, `/dev/live`, `/dev/simulator`), clears every car, the response in progress, and stops the blackboxes started by `curl`. The database keeps its history. A car that stops sending leaves the monitor after 30 s, unless it crashed.
 

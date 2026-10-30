@@ -9,7 +9,9 @@ import asyncio
 import logging
 import time
 
-from demo_data import (AMBULANCES, AUTO, CHECKIN_S, HELPER_RANGES_KM, PARKED_SPREAD, PLACES, ROLES, SCENARIOS, USERS,
+from datetime import datetime, timedelta
+
+from demo_data import (AMBULANCES, AUTO, CHECKIN_S, DEAD_ZONE, HELPER_RANGES_KM, PARKED_SPREAD, PLACES, ROLES, SCENARIOS, USERS,
                        WITNESS_RADIUS_M, YELLOW_LINE_M)
 from world import Path, Trip, haversine_m
 
@@ -32,8 +34,11 @@ class Engine:
         self.auto = False
         self.run_no = 0
         self.incident_no = 0
+        self.stop_blackbox = lambda device_id, why: None   # set by the server: the signal is lost in a dead zone
         self._reset_state()
         for key, scenario in SCENARIOS.items():  # the demo only makes sense if each case gets its level
+            if "case" not in scenario:
+                continue
             victim = USERS[0]
             level = severity.assess(scenario["case"], victim["age"], victim["male"])["m3"]["level"]
             if level != scenario["expect"]:
@@ -42,7 +47,7 @@ class Engine:
     def _reset_state(self, place="town"):
         self.place, self.geo = place, PLACES[place]
         self.helper_paths = {int(k): Path(v["geometry"]) for k, v in self.geo["helpers"].items()}
-        self.scenario = self.device_id = self.run_started = self.incident = None
+        self.scenario = self.device_id = self.run_started = self.incident = self.dz = None
         self.events, self.notifications, self.due = [], [], []
         self.note_no = 0
         self.users = {u["id"]: {**u, **ROLES.get(place, {}).get(u["id"], {}), "pos": self.geo["users"][str(u["id"])], "trip": None} for u in USERS}
@@ -66,8 +71,21 @@ class Engine:
         inc = self.incident
         inc["confidence"] = CONFIDENCE[max(0, CONFIDENCE.index(inc["confidence"]) - 1)]
 
+    def new_incident(self, stage, location, **extra):
+        self.incident_no += 1
+        self.incident = {"id": self.incident_no, "kind": "crash", "stage": stage, "location": location, "trigger": None,
+                         "m2": None, "severity": None, "confidence": None, "user_state": None, "nobody_around": False, "help_radius_km": None,
+                         "witness": {"confirmed_by": [], "denied_by": []}, "agent": {"confirmed": False, "severity": None},
+                         "dispatch": None, "helpers": {}, **extra}
+        return self.incident
+
     def status_label(self):
         inc = self.incident
+        if inc["kind"] == "dead_zone":
+            if self.dz["found"]:
+                return "Found: it was a crash"
+            return {"dead_zone_watch": "Heading into a no-coverage zone", "in_zone": "In the no-coverage zone", "turned_back": "Turned back",
+                    "overdue": "Not back: last known position", "dispatched": "Help going to the last known position"}[inc["stage"]]
         if inc["stage"] == "analyzing":
             return "Analyzing the trigger"
         if inc["stage"] == "false_alarm":
@@ -118,14 +136,15 @@ class Engine:
                 progress = min(1.0, (now - d["started"]) / d["total_s"])
                 dispatch = {"ambulance_id": d["ambulance_id"], "eta_s": d["eta_s"], "eta_remaining_s": round(d["eta_s"] * (1 - progress)),
                             "progress": progress}
-            incident = {**{k: inc[k] for k in ("id", "stage", "confidence", "user_state", "m2", "severity", "witness", "agent",
+            incident = {**{k: inc[k] for k in ("id", "kind", "stage", "confidence", "user_state", "m2", "severity", "witness", "agent",
                                                   "helpers", "trigger", "location", "nobody_around", "help_radius_km")},
                         "status": self.status_label(), "dispatch": dispatch, "helper_ranges": self.helper_ranges()}
         s = SCENARIOS.get(self.scenario)
         return {
             "type": "state", "server_time": time.time(), "auto": self.auto, "place": self.place, "incident": incident, "events": self.events,
-            "scenario": None if not s else {"key": self.scenario, "title": s["title"], "device_id": self.device_id,
+            "scenario": None if not s else {"key": self.scenario, "title": s["title"], "device_id": self.device_id, "kind": s.get("kind", "crash"),
                                             "elapsed_s": now - self.run_started, "trip_s": s["trip_s"], "traffic": s["traffic"]},
+            "dead_zone": None if not self.dz else {k: v for k, v in self.dz.items() if k not in ("trip", "crash_at", "overdue_at")},
             "users": [{**{k: v for k, v in u.items() if k != "trip"}, **self.distance_to_crash(u)} for u in self.users.values()],
             "ambulances": [{**{k: v for k, v in a.items() if k != "trip"}, "eta_s": self.eta_s(a)} for a in self.ambulances.values()],
             "notifications": [self.public_note(n) for n in self.notifications],
@@ -136,7 +155,9 @@ class Engine:
         return round(self.geo["ambulance"]["duration_s"] * traffic + amb["prep_s"])
 
     def crash_distance_m(self, user):
-        return haversine_m(user["home"] if "home" in user else user["pos"], self.geo["crash"])
+        """To the crash, or in a dead zone to the last known position: the crash itself isn't known."""
+        target = self.incident["location"] if self.incident else self.geo["crash"]
+        return haversine_m(user["home"] if "home" in user else user["pos"], target)
 
     def distance_to_crash(self, user):
         out = {"distance_km": round(self.crash_distance_m(user) / 1000, 1)}
@@ -168,18 +189,17 @@ class Engine:
         self.incident_no = 0
         self.scenario, self.device_id, self.run_started = key, f"user0-run{self.run_no}", time.monotonic()
         self.say(f"Scenario {s['title']}", who="dev", kind="scenario")
-        self.say(f"Severity case: {s['case_source']}", who="dev", kind="case")
+        if "case" in s:
+            self.say(f"Severity case: {s['case_source']}", who="dev", kind="case")
+        if s.get("kind") == "dead_zone":
+            self.start_dead_zone()
         await self.broadcast()
         return self.device_id
 
     async def on_trigger(self, device_id, seq, peak_g, location):
         if device_id != self.device_id or self.incident:
             return
-        self.incident_no += 1
-        self.incident = {"id": self.incident_no, "stage": "analyzing", "location": self.geo["crash"], "trigger": {"seq": seq, "peak_g": round(peak_g, 2)},
-                         "m2": None, "severity": None, "confidence": None, "user_state": None, "nobody_around": False, "help_radius_km": None,
-                         "witness": {"confirmed_by": [], "denied_by": []}, "agent": {"confirmed": False, "severity": None},
-                         "dispatch": None, "helpers": {}}
+        self.new_incident("analyzing", self.geo["crash"], trigger={"seq": seq, "peak_g": round(peak_g, 2)})
         self.say(f"Trigger on {self.name(0)}'s car: impact of {peak_g:.1f} g. Checking the last 16 seconds.", kind="trigger")
         await self.broadcast()
 
@@ -243,7 +263,11 @@ class Engine:
         note["state"], note["answer"] = "answered", action
         inc, uid = self.incident, note["user_id"]
         who = self.name(uid)
-        if inc:
+        if note["kind"] == "dz_back":
+            self.set_return(action)
+        elif note["kind"] == "dz_warning":
+            self.answer_warning(action)
+        elif inc:
             kind = note["kind"]
             if kind == "check" and action == "ok" and inc["nobody_around"]:
                 inc["user_state"] = "ok"
@@ -290,8 +314,9 @@ class Engine:
     # ------------------------------------------------------------ the agent's actions
 
     def usable(self):
+        """Can help be sent? In a dead zone, only once the driver is overdue."""
         inc = self.incident
-        return inc is not None and inc["stage"] not in ("analyzing", "false_alarm")
+        return inc is not None and inc["stage"] not in ("analyzing", "false_alarm", "dead_zone_watch", "in_zone", "turned_back")
 
     async def agent_confirm(self, severity=None):
         if not self.usable():
@@ -349,11 +374,15 @@ class Engine:
 
     async def call_person(self, who):
         """The agent phones someone. There is no phone line yet: the answer depends on what we know of them."""
-        if not self.usable():
-            return "no_crash"
         inc, victim = self.incident, self.users[0]
+        if inc is None or inc["stage"] in ("analyzing", "false_alarm"):
+            return "no_crash"
         if who == "contact":
             self.say(f"You called the emergency contact: {victim['emergency_contact']}.", kind="agent")
+        elif inc["kind"] == "dead_zone" and self.dz["phase"] == "driving":
+            self.say(f"You called {victim['name']}: they answered. You can warn them before the signal goes.", kind="agent")
+        elif inc["kind"] == "dead_zone":
+            self.say(f"You called {victim['name']}: no network, the call can't connect.", kind="agent")
         elif inc["user_state"] in ("ok", "needs_help", "voice_sos"):
             self.say(f"You called {victim['name']}: they answered. Set the severity from what they say, then confirm.", kind="agent")
         else:
@@ -380,6 +409,8 @@ class Engine:
             if note["state"] == "open" and note["_deadline"] is not None and now >= note["_deadline"]:
                 note["state"] = "expired"
                 changed = True
+                if note["kind"] == "dz_back":
+                    self.set_return(DEAD_ZONE["default"], answered=False)
                 if note["kind"] == "check" and self.incident and self.incident["user_state"] == "pending":
                     self.incident["user_state"] = "not_responding"
                     self.say(f"No answer from {self.name(note['user_id'])} after {CHECKIN_S} s. {self.status_label()}.", kind="user")
@@ -387,6 +418,7 @@ class Engine:
             self.due.remove(item)
             changed |= await self.auto_answer(item[1])
         changed |= await self.move(now)
+        changed |= await self.dead_zone_step(now)
         if changed:
             await self.broadcast()
 
@@ -409,6 +441,7 @@ class Engine:
                 if inc:
                     inc["stage"] = "on_scene"
                 self.say(f"{amb['name']} is on the scene.", kind="dispatch")
+                self.found(amb["name"])
         for u in self.users.values():
             trip = u["trip"]
             if trip is not None and inc and inc["helpers"].get(u["id"]) in ("accepted", "confirmed"):
@@ -417,10 +450,136 @@ class Engine:
                 if trip.done(now):
                     inc["helpers"][u["id"]] = "on_scene"
                     self.say(f"{u['name']} is on the scene.", kind="helper")
+                    self.found(u["name"])
         return moving
+
+    # ------------------------------------------------------------ scenario 3: no network, no one around
+
+    def start_dead_zone(self):
+        """The server can't see a crash with no network, so the only safety net is what the driver says before going in."""
+        road, d = Path(self.geo["ambulance"]["geometry"]), DEAD_ZONE
+        start, entry = road.length - d["start_m"], road.length - d["entry_m"]
+        centre = road.from_end(d["entry_m"] / 2)
+        self.users[0]["pos"] = road.at_distance(start)
+        self.dz = {"phase": "driving", "road": d["road"], "trip": Trip(Path(road.part(start, entry)), time.monotonic(), d["drive_s"]),
+                   "entry": road.at_distance(entry), "last_seen": None, "last_seen_at": None, "back_by": None, "back_defaulted": False,
+                   "zone": {"center": centre, "radius_m": haversine_m(centre, road.at_distance(entry)) * 1.05},
+                   "warned": False, "told_no_help": False, "acknowledged": False, "crashed": False, "found": False,
+                   "crash_at": None, "overdue_at": None}
+        self.schedule(d["ask_s"], "dz_ask")
+
+    async def ask_return(self):
+        d = DEAD_ZONE
+        await self.notify(0, "dz_back", "No network ahead", f"In about 15 minutes you enter a zone with no network, on {d['road']}. When do you expect to be back?",
+                          [{"id": k, "label": v[0]} for k, v in d["back"].items()], CHECKIN_S)
+        self.say("The app asked the driver when they expect to be back.", who="dev", kind="dead_zone")
+
+    def set_return(self, option, answered=True):
+        d, dz, who = DEAD_ZONE, self.dz, self.name(0)
+        if dz is None or dz["back_by"]:
+            return
+        dz["back_by"] = (datetime.now() + timedelta(minutes=d["back"][option][1])).strftime("%H:%M")
+        dz["back_defaulted"] = not answered
+        self.new_incident("dead_zone_watch", dz["entry"], kind="dead_zone")
+        how = "they expect to be back" if answered else "no answer, so the app used the route's ETA: back"
+        self.say(f"{who} is heading into a no-coverage zone on {d['road']}: {how} by {dz['back_by']}.", kind="trigger")
+
+    def answer_warning(self, action):
+        dz, who = self.dz, self.name(0)
+        if action == "turn_back" and dz["phase"] == "driving":
+            dz["phase"] = "turned_back"
+            self.incident["stage"] = "turned_back"
+            self.stop_blackbox(self.device_id, "the driver turning back")
+            self.say(f"{who} turned back.", kind="agent")
+        elif action == "continue":
+            self.say(f"{who} is going in anyway.", kind="agent")
+        else:
+            self.say(f"{who} has read the warning.", kind="agent")
+
+    async def warn_driver(self, message):
+        """The agent's two messages, for as long as the driver still has network."""
+        dz = self.dz
+        if dz is None or self.incident is None:
+            return "no_crash"
+        if dz["phase"] != "driving":
+            return "no_network"
+        if message == "dont_go" and not dz["warned"]:
+            dz["warned"] = True
+            await self.notify(0, "dz_warning", "Protection Civile: don't go", f"We advise you not to enter this zone on {DEAD_ZONE['road']} now.",
+                              [{"id": "turn_back", "label": "Turn back"}, {"id": "continue", "label": "Continue anyway"}])
+            self.say(f"You warned {self.name(0)} not to go.", kind="agent")
+        elif message == "no_help" and not dz["told_no_help"]:
+            dz["told_no_help"] = True
+            minutes = round(self.eta_s(self.ambulances["amb-1"]) / 60)
+            await self.notify(0, "dz_warning", "Help can't reach you there", f"With no network nobody will know if something happens, and an ambulance needs {minutes} min or more.",
+                              [{"id": "ok", "label": "Understood"}])
+            self.say(f"You told {self.name(0)} help can't reach them there.", kind="agent")
+        else:
+            return "already_sent"
+        await self.broadcast()
+        return "ok"
+
+    async def acknowledge(self):
+        if self.dz is None or self.incident is None:
+            return "no_crash"
+        self.dz["acknowledged"] = True
+        await self.broadcast()
+        return "ok"
+
+    async def dead_zone_step(self, now):
+        dz = self.dz
+        if dz is None:
+            return False
+        if dz["phase"] == "driving":
+            self.users[0]["pos"] = dz["trip"].position(now)
+            if dz["trip"].done(now) and dz["back_by"]:
+                self.enter_zone(now)
+            return True
+        if dz["phase"] == "in_zone":
+            changed = False
+            if not dz["crashed"] and now >= dz["crash_at"]:
+                dz["crashed"] = changed = True
+                self.say("The car crashed in the zone. The blackbox keeps the data, but nothing can reach the server. Only this log knows.", who="dev", kind="dead_zone")
+            if now >= dz["overdue_at"]:
+                self.go_overdue()
+                changed = True
+            return changed
+        return False
+
+    def enter_zone(self, now):
+        dz, inc = self.dz, self.incident
+        dz["phase"], dz["last_seen"], dz["last_seen_at"] = "in_zone", list(self.users[0]["pos"]), datetime.now().strftime("%H:%M")
+        dz["crash_at"], dz["overdue_at"] = now + DEAD_ZONE["crash_after_s"], now + DEAD_ZONE["overdue_after_s"]
+        dz["acknowledged"] = True
+        inc["stage"], inc["location"] = "in_zone", dz["last_seen"]
+        for note in self.notifications:
+            if note["kind"] == "dz_warning" and note["state"] == "open":
+                note["state"] = "expired"
+        self.stop_blackbox(self.device_id, "the loss of the signal")
+        self.say(f"{self.name(0)} entered the zone. The signal is gone: last known position saved at {dz['last_seen_at']}.", kind="dead_zone")
+
+    def go_overdue(self):
+        dz, inc, who = self.dz, self.incident, self.name(0)
+        dz["phase"], dz["acknowledged"] = "overdue", False
+        inc["stage"] = "overdue"
+        self.say(f"{who} isn't back by {dz['back_by']}. The return time is compressed for the demo.", who="dev", kind="dead_zone")
+        self.say(f"{who} is not back by {dz['back_by']}. Send help to the last known position.", kind="trigger")
+        self.say(f"Emergency contact warned first: {self.users[0]['emergency_contact']}.", kind="notification")
+        self.say("Gendarmerie alerted with the last position, the route and the car's description.", kind="notification")
+
+    def found(self, by):
+        dz = self.dz
+        if dz is None or dz["found"]:
+            return
+        dz["found"], dz["phase"] = True, "found"
+        self.incident["location"] = self.geo["crash"]
+        self.say(f"{by} found {self.name(0)} further along {DEAD_ZONE['road']}, past the last known position: it was a crash. Its data arrives now.", kind="trigger")
 
     async def auto_answer(self, what):
         """What the Auto switch plays: a witness confirms, a helper accepts. User 0 never answers."""
+        if what == "dz_ask":
+            await self.ask_return()
+            return True
         wanted = {"auto_witness": (1, "witness", "confirm"), "auto_helper": (4, "helper", "accept")}[what]
         note = next((n for n in self.notifications if n["user_id"] == wanted[0] and n["kind"] == wanted[1] and n["state"] == "open"), None)
         if note:

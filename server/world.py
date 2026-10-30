@@ -32,6 +32,11 @@ class Path:
     def at(self, fraction):
         return self.at_distance(self.length * fraction)
 
+    def part(self, d0, d1):
+        """The points of the path between two distances from its start."""
+        inner = [p for p, c in zip(self.points, self.cum) if d0 < c < d1]
+        return [self.at_distance(d0), *inner, self.at_distance(d1)]
+
     def from_end(self, d):
         """The point d metres before the end of the path."""
         return self.at_distance(self.length - d)

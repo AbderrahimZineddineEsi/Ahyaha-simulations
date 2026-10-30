@@ -64,13 +64,14 @@ async function run(preset, clockOverride, acceptReroute) {
   while (metres < total() - 50) {
     const r = await phone.scan(metres);
     for (const a of r.alerts) {
-      alerts.push({ ...a, atKm: metres / 1000 });
+      const record = { ...a, atKm: metres / 1000 };
+      alerts.push(record);
       line.push(`  scan ${String(Math.round(t / SCAN_S)).padStart(2)}  km ${(metres / 1000).toFixed(1).padStart(5)}  ` +
         `${a.level.toUpperCase().padEnd(9)} ${a.type.padEnd(11)} in ${(a.startsIn / 1000).toFixed(1)} km, ${(a.length / 1000).toFixed(1)} km long` +
         `  peak ${a.peakX.toFixed(1)}x now, ${a.refX.toFixed(1)}x at Tue 11h` +
-        (a.offer ? `  -> OFFER safer route (risky km ${a.offer.main.riskyKm.toFixed(1)} -> ${a.offer.alt.riskyKm.toFixed(1)}, ${a.offer.alt.minutes - a.offer.main.minutes >= 0 ? "+" : ""}${(a.offer.alt.minutes - a.offer.main.minutes).toFixed(0)} min)` : "") +
-        (a.noSafer ? `  -> NO SAFER ROAD${a.compare ? ` (cut only ${(a.compare.cut * 100).toFixed(0)}%)` : " (no alternative route)"}` : ""));
-      if (a.offer && acceptReroute) a.accepted = true;
+        (a.offer ? `  -> OFFER safer route (average risk ${a.offer.main.avgX.toFixed(1)}x -> ${a.offer.alt.avgX.toFixed(1)}x, ${a.offer.alt.minutes - a.offer.main.minutes >= 0 ? "+" : ""}${(a.offer.alt.minutes - a.offer.main.minutes).toFixed(0)} min)` : "") +
+        (a.noSafer ? `  -> NO SAFER ROAD${a.compare ? ` (average risk ${a.compare.main.avgX.toFixed(1)}x vs ${a.compare.alt.avgX.toFixed(1)}x, cut only ${(a.compare.cut * 100).toFixed(0)}%)` : " (no alternative route)"}` : ""));
+      if (a.offer && acceptReroute) { record.accepted = true; phone.rerouting = true; }
     }
     // sim drive for one scan interval
     let left = SCAN_S * TIME_SCALE;

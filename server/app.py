@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from blackbox_sim import LEAD_IN_S, packet_line, reply_line, scenario_packets, stamp
 from database import Database
+from demo_data import SCENARIOS
 from incident import Engine
 from m2_model import M2, bb
 from ops import make_router
@@ -79,6 +80,7 @@ class Blackbox:
     started: float
     stopped: bool = False
     lead_in_s: int = LEAD_IN_S
+    stopped_by: str = "a reset on the server"
 
     def started_message(self, device_id):
         return {"type": "blackbox_started", "device_id": device_id, "scenario": self.scenario, "lead_in_s": self.lead_in_s,
@@ -100,6 +102,14 @@ blackboxes: dict[str, "Blackbox"] = {}  # the ones running on the server
 db = Database()
 m2 = M2()
 engine = Engine(Severity())
+
+
+def stop_blackbox(device_id, why):
+    if device_id in blackboxes:
+        blackboxes[device_id].stopped, blackboxes[device_id].stopped_by = True, why
+
+
+engine.stop_blackbox = stop_blackbox
 background: set[asyncio.Task] = set()
 
 
@@ -328,7 +338,7 @@ async def run_blackbox(device_id, blackbox):
             next_at += 1
             await asyncio.sleep(max(0, next_at - time.monotonic()))
             if blackbox.stopped:
-                yield "\nStopped by a reset on the server.\n"
+                yield f"\nStopped by {blackbox.stopped_by}.\n"
                 return
             packet = stamp(packet, device_id, seq)
             raw = json.dumps(packet, separators=(",", ":"))
@@ -370,7 +380,9 @@ async def begin_scenario(key):
     """Starts the crash of user 0 for scenario a or b: the blackbox's data goes through the real pipeline."""
     await reset_everything()
     device_id = await engine.start_scenario(key)
-    blackboxes[device_id] = Blackbox("crash", time.monotonic(), lead_in_s=0)
+    # Scenario 3 is a drive with no crash the server can see: the signal is lost before anything happens
+    recording = "normal" if SCENARIOS[key].get("kind") == "dead_zone" else "crash"
+    blackboxes[device_id] = Blackbox(recording, time.monotonic(), lead_in_s=0)
     return device_id
 
 
@@ -380,7 +392,7 @@ async def consume(generator):
 
 
 @app.post("/dev/start/{key}")
-async def dev_start(key: Literal["a", "b", "2"]):
+async def dev_start(key: Literal["a", "b", "2", "3"]):
     device_id = await begin_scenario(key)
     task = asyncio.create_task(consume(run_blackbox(device_id, blackboxes[device_id])))
     background.add(task)
@@ -389,7 +401,7 @@ async def dev_start(key: Literal["a", "b", "2"]):
 
 
 @app.get("/dev/run/{key}")
-async def dev_run(key: Literal["a", "b", "2"], request: Request):
+async def dev_run(key: Literal["a", "b", "2", "3"], request: Request):
     """The same as the /dev button, from a terminal: `curl -N`, and the packets print as they are sent."""
     device_id = await begin_scenario(key)
     host = request.headers.get("host", "localhost:8000")

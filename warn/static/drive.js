@@ -99,7 +99,7 @@
       : r.stretches.length ? "risky stretch already announced" : "nothing to warn about";
     addLog({ n: ++S.scans, m, request: first ? `GET ${first.url.replace("/api/road-ahead", "road-ahead")}${S.requestLog.length > 1 ? ` (+${S.requestLog.length - 1} more)` : ""}` : "", segments: `${r.scored.length} (${(r.scored.length * 0.2).toFixed(1)} km)`,
               peak: PhoneUI.fmtX(peak), ms: `${r.m1Ms.toFixed(1)} ms`, result });
-    for (const alert of r.alerts) {
+    for (const alert of [...r.alerts].sort((a, b) => a.startsIn - b.startsIn)) {
       S.alerts.push(alert);
       S.shown.push(alert);
       MapView.addZone(alert);
@@ -122,6 +122,7 @@
       onTake: () => {
         S.comparing = false;
         S.pending = true;
+        S.phone.rerouting = true;
         alert.offer.taken = true;
         PhoneUI.hideOffer(alert);
         MapView.emphasizeAlternative();
@@ -138,6 +139,7 @@
     for (const a of [...S.alerts]) PhoneUI.remove(a);
     S.phone.takeAlternative();
     S.leg = "alt";
+    MapView.dimMainAfter(S.preset.branch_m);
     S.scored = [];
     S.scanTimer = S.scanEvery;          // scan the new road at once
     PhoneUI.toast("Following the safer route");
