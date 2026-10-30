@@ -21,7 +21,7 @@ One crash goes from raw signals through M2, M3 and M4 in about 8 ms on one lapto
 - M1: fix the missing-data flaw, and build the OpenStreetMap and weather lookups
 - `crash_summary()`: fix ΔV underestimates and the `multi_impact` threshold
 - Phone-side crash detection, and the confidence ladder that combines all signals
-- A backend AI API serving the four models
+- A backend AI API serving the four models (M2 is live over WebSocket in `server/`; M1, M3 and M4 aren't yet)
 - The profile rule (pregnancy, heart disease, blood thinners raise M3 by one level)
 
 ## Getting started
@@ -35,6 +35,15 @@ python download_models.py --data   # also the M3 and M4 training tables
 The Hugging Face repo is private for now, so you need access to it: run `hf auth login` first, or set `HF_TOKEN`.
 
 [MODEL_SPEC.md](MODEL_SPEC.md#using-the-models) has code that runs all four models.
+
+## Running the server
+
+```bash
+python server/app.py
+python server/example_client.py    # in a second terminal, to test it
+```
+
+A simulated blackbox connects over WebSocket, sends a 16 s telemetry window and gets M2's prediction back. The server prints the address to give to the other PC. [server/PROTOCOL.md](server/PROTOCOL.md) documents the request and the response.
 
 ## Repository layout
 
@@ -51,6 +60,8 @@ m2/  crash detection  m2_blackbox.py (signal code, shared with the backend)
                       build_m2_notebook.py (regenerates the notebook)
 m3/  severity         train_m3.ipynb, build_m3_dataset.py
 m4/  injury map       train_m4.ipynb, build_m4_dataset.py
+server/               WebSocket server: app.py, m2_model.py, PROTOCOL.md (the request format),
+                      example_client.py, examples/ (real windows to send)
 archive/              early notes and the first version of the plan
 ```
 
