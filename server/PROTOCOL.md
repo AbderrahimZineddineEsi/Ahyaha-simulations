@@ -12,7 +12,7 @@ The server prints the full address when it starts. Both PCs must be on the same 
 
 Open `http://<server-ip>:8000/health` in a browser. You should see `"status":"ok"`.
 
-Then run the example simulator, which replays the recordings in [examples/](examples/):
+Then run the example simulator, which sends the ready-made messages in [examples/](examples/):
 
 ```bash
 pip install websockets
@@ -21,6 +21,22 @@ python example_client.py trigger_no_crash --url ws://<server-ip>:8000/ws/telemet
 ```
 
 Each run takes about 36 s and ends with one prediction: `level` `crash` for the first, `none` for the second. Add `--fast` to send without waiting. `python example_client.py normal` sends normal driving until you press Ctrl+C.
+
+Whoever runs the server can watch all of this live at `http://localhost:8000/`: each second's status, the countdown after a trigger, and the prediction.
+
+## The ready-made messages
+
+Each file in [examples/](examples/) is a **list of 16 messages**, one per second, in the format of section 2. Send them in order, one per second.
+
+| File | What it simulates | What the monitor shows |
+|---|---|---|
+| [normal.json](examples/normal.json) | 16 s of normal driving, never reaches the trigger | "No trigger detected" every second |
+| [crash.json](examples/crash.json) | A real crash. The trigger fires in message 8. | Trigger, a countdown from 7 s to 1 s, then `crash` |
+| [trigger_no_crash.json](examples/trigger_no_crash.json) | Hard braking. The trigger fires in message 8. | Trigger, the same countdown, then `none` |
+
+**Renumber `seq` before sending.** Every file counts from 0, but `seq` must keep going up for each car. Send `normal.json` on repeat as the base, and when a scenario starts, send it after at least 10 messages of normal driving, with the `seq` of every message continuing from the last one. A scenario sent straight after another, with `seq` back at 0, makes the server think the simulator restarted. [example_client.py](example_client.py) shows how: it stamps `device_id`, `seq` and `recorded_at` on each message just before sending it.
+
+A full crash demo is: normal driving, then `crash.json`, then normal driving again. After the trigger's second the server waits 7 more seconds for the prediction, so keep sending.
 
 ## 2. What to send
 
@@ -101,7 +117,7 @@ Results from 20 runs of each, with this recipe:
 
 Hitting harder doesn't help: real crashes peak around 3.7 g, and a clean 30 g pulse scored lower than a clean 5 g one. Don't skip step 2, because the messy seconds after the impact matter more than the size of the pulse.
 
-For a result that must work every time in the demo, replay `examples/crash.json`, a real recording.
+For a result that must work every time in the demo, send `examples/crash.json`, a real recording.
 
 ### Scenario 2: trigger without a crash
 

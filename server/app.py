@@ -15,12 +15,14 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Literal
 
 import numpy as np
 import uvicorn
 from annotated_types import Len
 from fastapi import FastAPI, WebSocket
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from database import Database
@@ -69,9 +71,12 @@ class Car:
     stream: DeviceStream
     ws: WebSocket | None = None
     last_seen: float = 0.0
+    status: dict | None = None
+    prediction: dict | None = None
 
 
 cars: dict[str, Car] = {}
+monitors: set[WebSocket] = set()
 db = Database()
 m2 = M2()
 
@@ -107,6 +112,25 @@ async def send(ws, message):
         log.warning("couldn't send %s: %s", message["type"], e)
 
 
+async def tell_monitors(message):
+    await asyncio.gather(*(send(ws, message) for ws in list(monitors)))
+
+
+async def publish_status(device_id, car, peak_g):
+    """What the monitor page shows for this second."""
+    stream = car.stream
+    car.status = {"type": "status", "device_id": device_id, "seq": stream.last_seq, "peak_g": round(peak_g, 2),
+                  "state": "watching"}
+    if stream.collecting:
+        before_s, remaining_s = stream.progress()
+        car.status.update(state="collecting", trigger_seq=stream.trigger_second.seq,
+                          before_s=before_s, remaining_s=remaining_s)
+        log.info("%s seq=%d collecting: %d s before held, %d s left", device_id, stream.last_seq, before_s, remaining_s)
+    else:
+        log.info("%s seq=%d no trigger (peak %.2f g)", device_id, stream.last_seq, peak_g)
+    await tell_monitors(car.status)
+
+
 async def predict(device_id, car, w):
     result = m2.predict(w.acc, w.gyro, w.speed)
     location = w.trigger.location
@@ -124,7 +148,9 @@ async def predict(device_id, car, w):
     reply["prediction_id"] = db.save_prediction(reply)
     log.info("%s PREDICTION level=%s p=%.4f trigger_seq=%s filled=%.2f s (%.1f ms)", device_id, result["level"],
              result["p_crash"], w.trigger.seq, w.filled_s, result["latency_ms"])
+    car.prediction = reply
     await send(car.ws, reply)
+    await tell_monitors(reply)
 
 
 async def handle(raw, ws):
@@ -145,6 +171,7 @@ async def handle(raw, ws):
     windows = car.stream.push(t.seq, acc, gyro, speed, t.recorded_at, t.location)
     if car.stream.collecting and not was_collecting:
         log.info("%s TRIGGER at seq=%d, collecting the next %d s", t.device_id, t.seq, AFTER_S)
+    await publish_status(t.device_id, car, float(np.hypot(acc[:, 0], acc[:, 1]).max()))
     for w in windows:
         await predict(t.device_id, car, w)
 
@@ -198,6 +225,27 @@ async def telemetry(ws: WebSocket):
                 await stop_stream(device_id, car)
 
 
+@app.websocket("/ws/monitor")
+async def monitor(ws: WebSocket):
+    """Live feed for the monitor page. It only listens: nothing it sends is used."""
+    await ws.accept()
+    for car in cars.values():
+        for message in (car.prediction, car.status):
+            if message:
+                await send(ws, message)
+    monitors.add(ws)
+    try:
+        while (await ws.receive())["type"] != "websocket.disconnect":
+            pass
+    finally:
+        monitors.discard(ws)
+
+
+@app.get("/")
+def monitor_page():
+    return FileResponse(Path(__file__).parent / "monitor.html")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "model": "m2", "cars_seen": len(cars)}
@@ -220,4 +268,5 @@ if __name__ == "__main__":
     args = ap.parse_args()
     log.info("Trigger window: %d s before, %d s after", BEFORE_S, AFTER_S)
     log.info("Connect to ws://%s:%d/ws/telemetry", lan_ip(), args.port)
+    log.info("Watch it live at http://localhost:%d/", args.port)
     uvicorn.run(app, host=args.host, port=args.port, ws_max_size=MAX_MESSAGE_BYTES)
