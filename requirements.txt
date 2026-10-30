@@ -6,3 +6,6 @@ lightgbm==4.5.0
 joblib==1.4.2
 onnxruntime
 huggingface_hub
+# WebSocket server (server/)
+fastapi
+uvicorn[standard]
