@@ -63,6 +63,11 @@ class DeviceStream:
     def collecting(self):
         return self.trigger_at is not None
 
+    def progress(self):
+        """While collecting: whole seconds held from before the trigger, and seconds still to collect."""
+        before = min(BEFORE_S, self.trigger_at // HZ)
+        return before, max(0, -(-(self.trigger_at + AFTER - self.samples) // HZ))
+
     def push(self, seq, acc, gyro, speed, recorded_at=None, location=None):
         """Adds one second of data. Returns the windows it completed: usually none."""
         windows = []
