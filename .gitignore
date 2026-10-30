@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Model weights live on Hugging Face: python download_models.py
+m*/models/
+
+# Data: public sources, or `python download_models.py --data`
+m*/data/
+m*/raw/
+*.zip
+
+# Third-party files kept locally only: journal paper + supplement, and the
+# competition brief (it prints the organizers' personal phone numbers)
+archive/Probl*.pdf
+archive/Serious injury prediction*.pdf
+archive/gcpi_a_*.docx

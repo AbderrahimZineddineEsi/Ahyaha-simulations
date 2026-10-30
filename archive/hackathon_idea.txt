@@ -1,0 +1,70 @@
+The project will have : 1.app for users, 2. platform ( role based ) for pompiers, police/darak watani, hospital 
+
+note: we don't know what parties are involved in algeria specifically you can do some research and see the workflow and who gets involved so we include it 
+
+in the signup: we collect data that we will use for later, for example : 
+-medical background
+-first aid skills/certificates 
+-cronical diseases 
+-pregnant woman 
+-age
+-emergency contact numbers
+-address 
+..... 
+
+we will suppose two things exist that we will work with, a phone, and the blackbox ( which is a device we will make (simulate, no hardware)) 
+the blackbox will have a digital twin on the mobile app, it will do things like show results and stuff idk 
+
+
+we will have 3 or 4 ai models 
+
+1. predict dangerous roads ( using diffrenet conditions like road types, weather, history... ) and warn the user before going into that road, الوقاية خير من العلاج, 
+2. predict if an accident happened, crash detection, using the phone and the blackbox, we might combine the two for a higher confidence, or coordinate between them, we haven't thought of this yet , this will have a metric here called confidence, how confident are we that the accident happened, and based on it we will do diffrent actions 
+3. predict severity of accident, metric is severity, we're talking about the person here not the car 
+4. predict injured body parts, this might be combined with the third model, it will be used in the hospital digital twin ( more on that later ) 
+a reason why we might separate 3 and 4 : it depends on performance, imagine we can do a very performant model 3, but a weak model 4, if we only use model 4 we will have bad severity detection, but if we seprate them we can have good performance on 3 at least, while 4 is only for hospital, yyou will understand the use cases of severity later 
+
+
+what each one sees  : 
+you can deduce most of this from the flow i will mention later, but few important ones : 
+1. hospital: digital twin of the person after the accident based on the model 4 and based on the profile (filled at sign up remember) 
+2. himaya madaniya : see a map of the accident, and devices (people) nearby, helper profiles ( medics or first aid experts shown in red or something), ambulence availablility, and destination if already on the way ( use for feature later ) , staff nearby 
+3. darak watani : idk, maybe staff nearby or stuff 
+
+the flow : 
+this depends on two main thigns : 1. people nearby exist ? 2. network exist ? 
+
+if network available : 
+1. road danger model works : warn the user "medium accident risk ahead, be careful" or "lower speed advised" , notification or pop up, while very high risks give alerts -possibly-
+2. accident detection model: if detected an accident, broadcast a signal to nearby devices: "an accident nearby, confirm/deny" and gives confidence level 
+3. severity detection model : if accident detected, it runs, and gives the severity level ( low, medium, high, extreme for example )
+
+if people nearby : optimize for faster reaction and saving the life 
+1. when at least one person clicks confirm, confidence goes to 100% 
+2. nearby cars receive a warning : "accident ahead slow down immediatly" same as message i said above im just repeating now shit 
+3. likely a person would have called, and the responder will do :
+a. if not already, mark accident as confirmed, and if not even reported by the app mark it as a new entry 
+b. mark severity level : if reported by a user, (answering questions from the responder- idk what to call it-) then mark that severity 
+c. a message is sent to free an ambulence, with priorities depending on the severity, give it destination and calculate ETA 
+d. a button for "call for help" will broadcast a call for help for the nearby helpers, and the responder may choose to wait until one confirms to call , or directly call any of them, to give further instructions, this is important when the accident is far and the sevirity is high and the ambulence will take a long time to arrive, so basically to ssave a life 
+4. when ambulence is on the way ( or maybe even the confirmed helper -suggested not confirmed- ) an alert will go on the phones : "liberez la ligne jaune" so it can arrive faster
+5. before going, the staff will know of the patients condition, see his digital twin, to prepare for the situaiton better, same thing for the hospital, 
+
+if no one around : we will optimize for getting the report to the facilities -idk what to call them-
+1. show the user an alert timer: "are you okay ? 30 seconds to answer" if no answer; send alert to authorities 
+2. can't have the sevirity level confirmed so work with predicted one, and deal with the accident accordingly 
+3. same call for help button, but wider range maybe, 
+4. call for help ( siri/bixby mode )  a keyword in the app to wake up, in the case you can use a call for help button with any device in case you dont have something like siri or bixby, or no internet ( bixby uses internet for example ) for exampel "help help help" will trigger a call, useful for cases where you cannot physically hold the phone 
+5. quick call button in the case you cannot talk and exlpain situation -this won't call but just give the alert in the platforms- 
+6. point 4 and 5 will raise confidence to 100%, and in 4 depending on the caller we can know the exact severity, while in 5 we assume high severity 
+7. point 3 button: responder may  wait for any of the previous actions before using it, if high severity then he will use it and give better guidance ( idk haven't thought of it much )
+
+
+if no network available :
+first if no wifi then just use sms to make the previous calls
+second, idk if any other technology exists if the sms doesn't work 
+third, let's say no network whatsoever 
+1. include survival guide in the book -suggested, not much important( in eyes of juries )- 
+2. we can't do anything if the user is inside the zone, so we will warn him before that, suppose we have a map of algeria where all the zones with no network are known, if the user will enter such zone, before arriving by like 15 minutes a query is sent "you're entering a no network zone, report a time (exampel 1 hour, or the ETA + 30 minutes, or a long time if he plans to stay there for some moment, anw  ) if you don't comeback ( or go back to any network zone ) we will suppose you are in danger and send help" 
+
+
