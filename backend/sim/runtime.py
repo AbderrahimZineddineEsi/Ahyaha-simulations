@@ -331,12 +331,11 @@ class Sim:
         if dz["phase"] == "driving":
             trip = dz["trip"]
             dz["car"] = trip.position(now)
+            await users.update_location(s, victim, *dz["car"], driving=True)   # a tick covers more road than the zone's margin, so this includes the last one, at the edge
             if trip.done(now) and checkin:      # the car is in the zone: no more locations reach the server
                 dz["phase"], dz["entered_at"] = "in_zone", now
                 self.stop_blackbox("the loss of the signal")
                 self.say(f"{victim.name} entered the zone. Nothing reaches the server from here.", "dead_zone")
-            else:
-                await users.update_location(s, victim, *dz["car"], driving=True)
         elif dz["phase"] == "in_zone":
             if not dz["crashed"] and now >= dz["entered_at"] + d["crash_after_s"]:
                 dz["crashed"] = True
