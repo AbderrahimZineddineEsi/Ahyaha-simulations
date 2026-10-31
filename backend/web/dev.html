@@ -327,7 +327,7 @@ function renderLog(s) {
 const CRASH_STEPS = ["Impact", "Crash model", "People asked", "Agent confirms", "Help sent", "On scene"];
 const ZONE_STEPS = ["Check-in", "Signal lost", "Crash unseen", "Not back", "Help sent", "Found"];
 const NO_CRASH_STEPS = ["Impact", "Crash model", "No crash. Nobody disturbed"];
-const STAGE_RANK = { analyzing: 1, detected: 3, agent_confirmed: 4, dispatched: 5, on_scene: 6, closed: 6 };
+const STAGE_RANK = { analyzing: 1, detected: 3, agent_confirmed: 4, dispatched: 5, on_scene: 6, transporting: 6, at_hospital: 6, closed: 6 };
 
 function stepRank(s) {
   const sc = s.scenario, inc = s.incident, dz = s.dead_zone;

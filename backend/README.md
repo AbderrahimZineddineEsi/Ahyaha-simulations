@@ -32,7 +32,7 @@ telemetry/         WebSocket ingest, the trigger and 16 s windows (stream.py), M
 ml/                M2, M3 and M4 at inference, and the choice of what goes into M3
 incidents/         the rules after M2 says crash (service.py), what clients see (view.py), the routes
 notifications/     sending, deadlines, answers, push and SMS escalation
-fleet/             ambulances: dispatch, positions, ETA, yellow line; helpers
+fleet/             ambulances: dispatch, positions, ETA, yellow line, transport to the hospital; helpers; police and Gendarmerie
 geo/               distances and routes (OSRM, saved routes, straight line)
 checkins/          the dead-zone check-ins
 hospitals/         facilities, beds, destination, the hospital's view of a patient

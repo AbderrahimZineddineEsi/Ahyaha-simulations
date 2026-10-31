@@ -111,6 +111,11 @@ async def call_helpers(incident_id: int, body: CallHelp | None = None, user=Depe
     return await act(s, incident_id, fleet.call_helpers, body.radius_km if body else None)
 
 
+@router.post("/incidents/{incident_id}/call-police")
+async def call_police(incident_id: int, body: CallHelp | None = None, user=Depends(agent), s=Depends(get_session)):
+    return await act(s, incident_id, fleet.call_police, body.radius_km if body else None)
+
+
 @router.post("/incidents/{incident_id}/call")
 async def call_person(incident_id: int, body: Phone, user=Depends(agent), s=Depends(get_session)):
     return await act(s, incident_id, service.call_person, body.who)

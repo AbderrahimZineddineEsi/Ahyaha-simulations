@@ -74,10 +74,11 @@ The agent sees a "dead zone" incident at once and can call or warn the driver (`
 | Call | Body | Notes |
 |---|---|---|
 | `GET /incidents?open_only=true` | | short summaries, newest first |
-| `GET /incidents/{id}` | | everything: `status`, `confidence`, `severity` (M3, M4 regions), `m2`, `profile`, `people`, `helpers`, `dispatch`, `helper_ranges`, `ambulances`, `dead_zone`, `hospital`, `events`, `notifications` |
+| `GET /incidents/{id}` | | everything: `status`, `confidence`, `severity` (M3, M4 regions), `m2`, `profile`, `people`, `helpers`, `dispatch`, `helper_ranges`, `police`, `police_ranges`, `ambulances`, `dead_zone`, `hospital`, `events`, `notifications` |
 | `POST /incidents/{id}/confirm` | `severity` (optional: `low`, `medium`, `high`, `extreme`) | defaults to the estimate |
 | `POST /incidents/{id}/dispatch` | `ambulance_id` | one ambulance per incident. Only once M2 has answered (and, in a dead zone, once overdue). |
 | `POST /incidents/{id}/call-helpers` | `radius_km` (5 or 20) | alerts helpers in range who weren't asked before. `409 nobody_left` if there are none. |
+| `POST /incidents/{id}/call-police` | `radius_km` (5 or 20) | sends every free police and Gendarmerie unit in range. They are under orders, so they go at once: nobody answers. `409 nobody_left` if there are none. |
 | `POST /incidents/{id}/confirm-helper` | `user_id` | after they accepted: sends the first-aid card |
 | `POST /incidents/{id}/call` | `who`: `user` or `contact` | **a mock**: it writes the outcome to the timeline. There is no phone line yet. |
 | `POST /incidents/{id}/warn` | `message`: `dont_go` or `no_help` | dead zone only, while the driver still has network |
@@ -85,7 +86,7 @@ The agent sees a "dead zone" incident at once and can call or warn the driver (`
 | `POST /incidents/{id}/found` | `lat`, `lon`, `by` | a responder reached a dead-zone driver: the crash is real, here |
 | `POST /incidents/{id}/location` | `lat`, `lon` | places a crash that arrived with no GPS, and alerts the people near it. Until then nothing can be sent (`409 no_location`). |
 | `GET /incidents/{id}/hospital-suggestions` | | hospitals ranked by distance, free beds and the specialties M4's injuries call for |
-| `POST /incidents/{id}/assign-hospital` | `hospital_id` | the hospital then sees the patient |
+| `POST /incidents/{id}/assign-hospital` | `hospital_id` | the hospital then sees the patient. `409 already_sent` once the ambulance has left with them. |
 | `POST /incidents/{id}/close` | | frees its ambulance, ends what was waiting, and tells helpers on their way to stand down |
 
 Errors are `{"detail": "<code>"}`: `no_crash` (too early, or not that kind of incident), `no_location`, `closed`, `unavailable`, `already_dispatched`, `nobody_left`, `not_accepted`, `bad_radius`, `bad_severity`, `no_network`, `already_sent`.
@@ -108,6 +109,10 @@ Routes come from OSRM, falling back to a straight line at 50 km/h (a rough estim
 
 | Call | Who | Body |
 |---|---|---|
+| `POST /ambulances/{id}/leave-scene` | dispatcher | the crew has the patient on board: the ambulance heads for the chosen hospital and the incident is `transporting`. Its next positions go through `POST /ambulances/{id}/location`, and reaching the hospital makes it `at_hospital`, takes a bed and frees the ambulance. `409 not_on_scene` or `no_hospital`. |
+| `GET /police/stations` | dispatcher | `force` is `police` or `gendarmerie` |
+| `GET /police/units` | dispatcher | `state` is `available`, `en_route` or `on_scene` |
+| `POST /police/units/{id}/location` | dispatcher | `lat`, `lon`. Send it while the unit moves: the server marks the arrival within 60 m. |
 | `GET /hospitals` | any staff | |
 | `PATCH /hospitals/{id}/beds` | that hospital's staff | `beds_free`, `beds_total` (optional) |
 | `GET /hospitals/{id}/incoming` | that hospital's staff | patients the agent sent: severity, injured regions, ETA, and the profile |

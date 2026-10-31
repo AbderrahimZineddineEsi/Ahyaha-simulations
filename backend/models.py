@@ -27,6 +27,15 @@ class Centre(Base):
     lon: Mapped[float]
 
 
+class PoliceStation(Base):
+    __tablename__ = "police_stations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    force: Mapped[str] = mapped_column(String(12))                       # police or gendarmerie
+    lat: Mapped[float]
+    lon: Mapped[float]
+
+
 class Hospital(Base):
     __tablename__ = "hospitals"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -166,7 +175,7 @@ class Ambulance(Base):
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
     centre_id: Mapped[int] = mapped_column(ForeignKey("centres.id"))
     name: Mapped[str] = mapped_column(String(80))
-    state: Mapped[str] = mapped_column(String(12), default="available")  # available, busy, dispatched, on_scene
+    state: Mapped[str] = mapped_column(String(12), default="available")  # available, busy, dispatched, on_scene, transport
     prep_s: Mapped[int] = mapped_column(Integer, default=0)             # the crew's time to get ready
     note: Mapped[str | None] = mapped_column(String(160))
     lat: Mapped[float | None]
@@ -179,7 +188,7 @@ class Dispatch(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id"), index=True)
     ambulance_id: Mapped[str] = mapped_column(ForeignKey("ambulances.id"))
-    state: Mapped[str] = mapped_column(String(10), default="en_route")   # en_route, on_scene, returned
+    state: Mapped[str] = mapped_column(String(10), default="en_route")   # en_route, on_scene, transport (to the hospital), delivered, returned
     eta_s: Mapped[int]
     start_m: Mapped[float] = mapped_column(Float, default=0)             # straight distance to the target when it left
     target_lat: Mapped[float]
@@ -187,6 +196,33 @@ class Dispatch(Base):
     route: Mapped[list | None] = mapped_column(JSON)
     dispatched_at: Mapped[datetime] = now_col()
     arrived_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PoliceUnit(Base):
+    __tablename__ = "police_units"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    station_id: Mapped[int] = mapped_column(ForeignKey("police_stations.id"))
+    name: Mapped[str] = mapped_column(String(80))
+    force: Mapped[str] = mapped_column(String(12))                       # police or gendarmerie
+    state: Mapped[str] = mapped_column(String(12), default="available")  # available, en_route, on_scene
+    lat: Mapped[float | None]
+    lon: Mapped[float | None]
+    located_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PoliceRequest(Base):
+    __tablename__ = "police_requests"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id"), index=True)
+    unit_id: Mapped[str] = mapped_column(ForeignKey("police_units.id"))
+    state: Mapped[str] = mapped_column(String(12), default="en_route")   # en_route, on_scene, cancelled
+    distance_m: Mapped[float]
+    eta_s: Mapped[int]
+    route: Mapped[list | None] = mapped_column(JSON)
+    requested_at: Mapped[datetime] = now_col()
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    unit: Mapped[PoliceUnit] = relationship(lazy="joined")
 
 
 class HelperRequest(Base):

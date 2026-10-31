@@ -49,6 +49,20 @@ AMBULANCES = [
 ]
 PARKED_SPREAD = {"town": 1, "remote": 4}  # the remote map is more zoomed out: parked ambulances need more room to show apart
 
+# Made-up stations, and the units on patrol. Where a unit is at each place, and its road to the crash, is in demo_routes.json
+POLICE_STATIONS = [
+    {"key": "bouira", "name": "Commissariat, Bouira centre", "force": "police", "lat": 36.3792, "lon": 3.9062},
+    {"key": "east", "name": "Gendarmerie brigade, Bouira east", "force": "gendarmerie", "lat": 36.3895, "lon": 3.9385},
+    {"key": "rn8b", "name": "Gendarmerie brigade, RN 8B", "force": "gendarmerie", "lat": 36.2598, "lon": 3.8548},
+]
+POLICE_UNITS = [
+    {"id": "pol-1", "name": "Police 1", "force": "police", "station": "bouira"},
+    {"id": "pol-2", "name": "Police 2", "force": "police", "station": "bouira"},
+    {"id": "gnd-1", "name": "Gendarmerie 1", "force": "gendarmerie", "station": "east"},
+    {"id": "gnd-2", "name": "Gendarmerie 2", "force": "gendarmerie", "station": "rn8b"},
+]
+TRANSPORT = {"scene_s": 4, "trip_s": 12}  # on screen: how long the crew stays with the patient, and the drive to the hospital, compressed
+
 # The severity of each scenario: real people from the CISS crash database, run through the real M3 and M4.
 # The blackbox recording is the same in both, so it can't tell the two apart: the demo case stands in for it.
 SCENARIOS = {
