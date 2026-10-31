@@ -60,7 +60,7 @@ function render(car) {
   el.dataset.mood = mood;
   el.querySelector(".headline").textContent = headline;
   el.querySelector(".detail").textContent = detail;
-  el.querySelector(".reading").textContent = status ? `Second ${status.seq}, peak ${status.peak_g.toFixed(2)} g` : "";
+  el.querySelector(".reading").textContent = status?.peak_g !== undefined ? `Second ${status.seq}, peak ${status.peak_g.toFixed(2)} g` : "";
   cells.forEach((cell, i) => cell.classList.toggle("held", i < held));
   el.querySelector(".history").replaceChildren(...car.history.slice(0, 3).map(text => {
     const li = document.createElement("li");

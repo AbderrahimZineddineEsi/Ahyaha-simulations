@@ -22,6 +22,10 @@ Needs the M1 weights (`python download_models.py`). The first run exports them t
 
 The warning screen depends on the cause. The phone re-scores the stretch at Tuesday 11h: if it stops being risky, the hour is the cause (night driving; night bends when at least 40% of its segments turn 30° or more in 200 m; otherwise a "risky hour"); if it stays risky, the road is (town, a junction or roundabout in a stretch of 650 m or less, or a generic risky stretch). The warning also says what M1 gave now and at Tuesday 11h.
 
+## Presenting it
+
+Each situation starts just before its problem and runs at 40× by default, so one takes 10 to 20 seconds. **Play all** runs the six in order. **Pause** (or Space) freezes the drive; **Pause on each warning** (on by default) stops it the moment a warning pops up, so you can show the screen, then press Resume. The speed selector goes from 6× (the old pace) to 80×.
+
 ## Situations
 
 The buttons at the top. The **Day** and **Hour** selectors replay the same road at another time.

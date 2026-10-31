@@ -4,7 +4,7 @@ const PhoneUI = (() => {
   const $ = (id) => document.getElementById(id);
   const COLORS = { low: "#5aa583", medium: "#e8c547", high: "#ee8a2b", "very high": "#c8231b", none: "#8a979c" };
   const LABEL = { low: "Low risk", medium: "Medium risk", high: "High risk", "very high": "Very high risk" };
-  const AUTO_COLLAPSE_MS = 12000;
+  const AUTO_COLLAPSE_MS = 60000;
   // Ribbon geometry (SVG units): the car at the bottom, LOOK_M metres ahead at the top
   const CAR_Y = 350, TOP_Y = 22, LOOK_M = 3000, PX_PER_M = (CAR_Y - TOP_Y) / LOOK_M;
   const RX = 131, RW = 38;
@@ -221,6 +221,9 @@ const PhoneUI = (() => {
     if (live.get(entry.alert) === entry) entry.el = addBanner(entry.alert, entry.handlers);
   }
 
+  // On Resume the full-screen alert gives way to its banner, so the drive carries on in view
+  function collapseFull() { for (const e of [...live.values()]) if (e.full) collapse(e); }
+
   function remove(alert) {
     const entry = live.get(alert);
     if (!entry) return;
@@ -267,5 +270,5 @@ const PhoneUI = (() => {
     el.querySelector("button").addEventListener("click", () => { el.hidden = true; onReplay(); });
   }
 
-  return { init, reset, setClock, setSpeed, setRoad, setChip, setScan, toast, renderRibbon, show, remove, update, hideOffer, showCompare, showEnd, fmtKm, fmtX, COLORS, COPY };
+  return { init, reset, setClock, setSpeed, setRoad, setChip, setScan, toast, renderRibbon, show, collapseFull, remove, update, hideOffer, showCompare, showEnd, fmtKm, fmtX, COLORS, COPY };
 })();

@@ -12,7 +12,8 @@ from backend.sim.data import PLACES
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 router = APIRouter()
-Key = Literal["a", "b", "2", "3"]
+NO_CACHE = {"Cache-Control": "no-cache"}   # a reload must not keep an old page
+Key = Literal["a", "b", "2", "3", "n"]
 
 
 class Auto(BaseModel):
@@ -21,22 +22,22 @@ class Auto(BaseModel):
 
 @router.get("/dev")
 def dev_page():
-    return FileResponse(WEB / "dev.html")
+    return FileResponse(WEB / "dev.html", headers=NO_CACHE)
 
 
 @router.get("/dev/monitor")
 def monitor_page():
-    return FileResponse(WEB / "monitor.html")
+    return FileResponse(WEB / "monitor.html", headers=NO_CACHE)
 
 
 @router.get("/dev/live")
 def live_page():
-    return FileResponse(WEB / "live.html")
+    return FileResponse(WEB / "live.html", headers=NO_CACHE)
 
 
 @router.get("/dev/simulator")
 def simulator_page():
-    return FileResponse(WEB / "simulator.html")
+    return FileResponse(WEB / "simulator.html", headers=NO_CACHE)
 
 
 @router.get("/dev/state")

@@ -3,136 +3,239 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SolveX dev</title>
-<link rel="stylesheet" href="/static/panel.css">
+<title>SolveX demo stage</title>
+<link rel="stylesheet" href="/static/theme.css">
 <style>
-  body { height: 100vh; overflow: hidden; }
-  header { flex: none; }
-  header nav a + a { margin-left: 0; }
-  main {
-    flex: 1; min-height: 0; display: grid; gap: 16px; padding: 0 24px 20px;
-    grid-template-columns: minmax(340px, 1.15fr) minmax(430px, 1.45fr) minmax(280px, 1fr);
-  }
-  .col { min-height: 0; display: flex; flex-direction: column; gap: 16px; }
-  .panel { background: var(--tarmac); color: var(--white); padding: 14px 16px; }
-  .panel h2 { margin: 0 0 10px; font-size: 1.15rem; font-weight: 700; }
-  .panel p { margin: 0 0 8px; line-height: 1.35; }
-  .muted { color: #b9c4c9; }
-  .buttons { display: flex; flex-wrap: wrap; gap: 10px; }
-  .buttons button { background: var(--line); color: var(--tarmac); padding: 10px 18px; font-size: 1.05rem; }
-  .buttons button:disabled { background: var(--tarmac-soft); color: #8fa0a8; cursor: default; }
-  .auto { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-weight: 700; }
-  .auto input { width: 22px; height: 22px; accent-color: var(--line); }
-  .scene { padding: 0; flex: none; }
+  body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ---- top bar */
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .scenarios { display: flex; flex-wrap: wrap; gap: 8px; }
+  .scenarios button { padding: 8px 14px; background: var(--tarmac-raised); color: var(--white); border: 2px solid transparent; }
+  .scenarios button:hover:not(:disabled) { background: var(--tarmac-soft); }
+  .scenarios button[data-active="true"], .scenarios button[data-active="true"]:hover:not(:disabled) { background: var(--line); color: var(--tarmac-deep); }
+  .scenarios button:disabled { opacity: .6; }
+  .auto { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: .95rem; cursor: pointer; }
+  .auto input { appearance: none; width: 38px; height: 22px; border-radius: 11px; background: var(--tarmac-raised); position: relative; cursor: pointer; transition: background-color .15s; margin: 0; }
+  .auto input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--white); transition: transform .15s; }
+  .auto input:checked { background: var(--clear); }
+  .auto input:checked::after { transform: translateX(16px); }
+
+  /* ---- layout */
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(380px, 36fr) minmax(0, 64fr); gap: 20px; padding: 16px 20px 18px; }
+  .stage { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+  .scene { flex: none; background: var(--tarmac); border-radius: 12px; overflow: hidden; }
+  .scene-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 16px 8px; }
+  .scene-head b { font-family: var(--font-head); font-size: 1.25rem; font-weight: 600; }
+  .scene-head span { color: var(--ink-soft); font-size: .88rem; text-align: right; }
   .scene canvas { display: block; width: 100%; height: auto; background: #5d7a4f; }
-  .scene .caption { margin: 0; padding: 10px 16px; min-height: 3.4em; font-size: 1.1rem; line-height: 1.3; }
-  .caption[data-tone="alarm"] { color: #ffb4ae; font-weight: 700; }
-  .caption[data-tone="clear"] { color: #8fe0c0; font-weight: 700; }
-  code { font-size: .9em; overflow-wrap: anywhere; }
+  .caption { margin: 0; padding: 10px 16px 12px; min-height: 3.5em; font-size: 1.1rem; line-height: 1.3; }
+  .caption[data-tone="alarm"] { color: var(--alarm-soft); font-weight: 600; }
+  .caption[data-tone="clear"] { color: var(--clear-soft); font-weight: 600; }
 
-  .phones { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-  .phone { min-height: 0; display: flex; flex-direction: column; background: var(--tarmac); border: 5px solid var(--tarmac); }
-  .phone > header { padding: 8px 10px; color: var(--white); display: block; }
-  .phone > header b { display: block; font-size: 1rem; }
-  .phone > header span { font-size: .9rem; color: #b9c4c9; }
-  .screen { flex: 1; min-height: 0; overflow-y: auto; background: var(--concrete); color: var(--tarmac); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
-  .idle { margin: auto; color: #6b7c85; }
-  .note { background: var(--white); padding: 8px 10px; border-left: 6px solid var(--tarmac-soft); }
-  .note[data-state="open"] { border-left-color: var(--line); }
-  .note[data-kind="alert"] { border-left-color: var(--alarm); }
-  .note h4 { margin: 0 0 2px; font-size: 1rem; }
-  .note p { margin: 0 0 6px; font-size: .95rem; line-height: 1.3; }
-  .note .state { font-size: .9rem; color: #5d6f78; }
-  .note .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .note .actions button { padding: 6px 12px; font-size: .95rem; background: var(--tarmac); }
+  /* ---- where the story is: the pipeline */
+  .steps { flex: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .steps li { font-size: .85rem; color: #7f949e; display: flex; flex-direction: column; gap: 6px; font-weight: 600; line-height: 1.15; }
+  .steps li::before { content: ""; height: 8px; border-radius: 4px; background: var(--tarmac-raised); }
+  .steps li[data-s="done"] { color: var(--white); }
+  .steps li[data-s="done"]::before { background: var(--clear); }
+  .steps li[data-s="active"] { color: var(--line); }
+  .steps li[data-s="active"]::before { background: var(--line); animation: breathe 1.4s ease-in-out infinite; }
+  .steps li[data-s="end"] { color: var(--clear-soft); }
+  .steps li[data-s="end"]::before { background: var(--clear); }
+  @keyframes breathe { 50% { opacity: .45; } }
+
+  .log { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--tarmac); border-radius: 12px; padding: 10px 14px 6px; }
+  .log h2 { margin: 0 0 4px; font-size: 1.05rem; color: var(--ink-soft); font-weight: 600; }
+  .log ol { margin: 0; padding: 0; list-style: none; overflow-y: auto; flex: 1; min-height: 0; font-size: .92rem; line-height: 1.3; }
+  .log li { padding: 5px 0; border-top: 1px solid var(--tarmac-line); display: grid; grid-template-columns: 4.6em 1fr; gap: 6px; }
+  .log li.dev { color: var(--ink-soft); }
+  .log time { color: var(--line); font-variant-numeric: tabular-nums; }
+  .log .hint { margin: 4px 0 6px; font-size: .8rem; color: #7f949e; overflow-wrap: anywhere; }
+
+  /* ---- phones */
+  .phones { min-height: 0; display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+  .phone { margin: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .phone[data-id="0"] { grid-row: 1 / span 2; }
+  .slot { flex: 1; min-height: 0; container-type: size; display: flex; justify-content: center; align-items: center; }
+  .who { flex: none; text-align: center; line-height: 1.2; }
+  .who b { display: block; font-size: 1.05rem; }
+  .who span { display: block; font-size: .88rem; color: var(--ink-soft); }
+  .who span::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: var(--tone, var(--blue)); }
+  .phone[data-id="0"] { --tone: var(--alarm); }
+  .phone[data-id="1"] { --tone: var(--blue); }
+  .phone[data-id="2"], .phone[data-id="3"] { --tone: #9aa8b0; }
+  .phone[data-id="4"], .phone[data-id="5"] { --tone: var(--clear); }
+
+  .device {
+    --r: 28px;
+    position: relative; container-type: inline-size;
+    width: min(100cqw, calc(100cqh * 9 / 17.5)); aspect-ratio: 9 / 17.5;
+    padding: 7px; border-radius: var(--r); background: #0a0f12;
+    box-shadow: 0 0 0 2px #3a4750, 0 14px 30px rgba(0, 0, 0, .55), inset 0 0 0 1px #000;
+  }
+  .device::before, .device::after { content: ""; position: absolute; width: 3px; background: #3a4750; border-radius: 2px; }
+  .device::before { right: -5px; top: 22%; height: 11%; }             /* power */
+  .device::after { left: -5px; top: 18%; height: 7%; box-shadow: 0 calc(7cqw + 14px) 0 #3a4750; }  /* volume */
+  .phone[data-id="0"] .device { box-shadow: 0 0 0 2px #7c3b38, 0 0 26px rgba(217, 43, 34, .28), 0 14px 30px rgba(0, 0, 0, .55), inset 0 0 0 1px #000; }
+  .phone.buzz .device { animation: buzz .5s linear; }
+  @keyframes buzz { 0%, 100% { transform: none; } 10% { transform: translateX(-4px) rotate(-.8deg); } 30% { transform: translateX(4px) rotate(.8deg); } 50% { transform: translateX(-3px) rotate(-.5deg); } 70% { transform: translateX(3px) rotate(.5deg); } 90% { transform: translateX(-1px); } }
+
+  .screen {
+    position: relative; height: 100%; border-radius: calc(var(--r) - 7px); overflow: hidden; display: flex; flex-direction: column;
+    background: radial-gradient(120% 70% at 50% 0%, #3b6075 0%, #1d3340 55%, #121e26 100%); color: var(--white);
+    font-size: max(11px, 5.6cqw);
+  }
+  .screen::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 34%; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .55); transform: translateX(-50%); }
+  .island { position: absolute; top: 7px; left: 50%; width: 27%; height: 15px; border-radius: 8px; background: #000; transform: translateX(-50%); z-index: 2; }
+  .status { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 8px 14px 0; font-size: .82em; font-weight: 600; height: 2.4em; }
+  .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: .85em; margin-right: 6px; }
+  .bars i { width: 3px; background: var(--white); border-radius: 1px; }
+  .bars i:nth-child(1) { height: 30%; } .bars i:nth-child(2) { height: 55%; } .bars i:nth-child(3) { height: 80%; } .bars i:nth-child(4) { height: 100%; }
+  .batt { display: inline-block; width: 1.5em; height: .75em; border: 1.5px solid rgba(255, 255, 255, .8); border-radius: 3px; position: relative; }
+  .batt::after { content: ""; position: absolute; inset: 1.5px; right: 35%; background: var(--white); border-radius: 1px; }
+  .nosignal { color: var(--alarm-soft); font-weight: 700; margin-right: 6px; }
+
+  .notes { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px 16px; display: flex; flex-direction: column; gap: 7px; scrollbar-width: none; }
+  .notes::-webkit-scrollbar { display: none; }
+  .lock { margin: auto; text-align: center; opacity: .85; }
+  .lock b { display: block; font-family: var(--font-head); font-size: 3.4em; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
+  .lock span { font-size: .85em; color: var(--ink-soft); }
+
+  .note { border-radius: 14px; padding: 9px 11px; background: rgba(255, 255, 255, .94); color: var(--tarmac-deep); border-left: 5px solid var(--tarmac-soft); transform-origin: top; }
+  .note[data-kind="alert"] { border-left-color: var(--line); }
+  .note[data-kind="witness"] { border-left-color: var(--blue); }
+  .note[data-kind="helper"] { border-left-color: var(--clear); }
+  .note[data-kind="sos"] { border-left-color: var(--alarm); }
+  .note h4 { margin: 0 0 2px; font-size: 1.15em; line-height: 1.1; }
+  .note p { margin: 0 0 7px; font-size: .92em; line-height: 1.28; }
+  .note .state { margin: 0; font-size: .85em; color: #51636c; }
+  .note .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .note .actions button { flex: 1 1 auto; padding: 7px 10px; font-size: .92em; border-radius: 9px; background: var(--tarmac); color: var(--white); }
+  .note .actions button:hover:not(:disabled) { background: var(--tarmac-soft); }
   .note .actions button.main { background: var(--clear); }
-  .note .cd { font-weight: 700; color: var(--alarm); }
+  .note.done { background: rgba(255, 255, 255, .16); color: var(--white); border-left-color: transparent; padding: 6px 11px; }
+  .note.done h4 { font-size: .95em; font-weight: 500; margin: 0; }
+  .note.done .state { color: var(--ink-soft); }
+  .note.done p:not(.state) { display: none; }
+  .note.enter { animation: pop .4s cubic-bezier(.2, 1.3, .3, 1); }
+  @keyframes pop { from { transform: translateY(-14px) scale(.94); opacity: 0; } }
+  .note.gone { animation: collapse .5s .9s ease-in forwards; overflow: hidden; }
+  @keyframes collapse { to { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-bottom: -7px; } }
 
-  .log { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .log ol { margin: 0; padding: 0; list-style: none; overflow-y: auto; flex: 1; min-height: 0; font-size: .95rem; line-height: 1.35; }
-  .log li { padding: 5px 0; border-top: 1px solid var(--tarmac-soft); }
-  .log li.dev { color: #b9c4c9; font-style: italic; }
-  .log time { display: inline-block; width: 4.6em; color: var(--line); font-style: normal; }
+  /* A question with a deadline takes over the screen */
+  .note.urgent { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; background: linear-gradient(170deg, #c4261e, #86150f); color: var(--white); border: 0; border-radius: 18px; padding: 14px 12px; }
+  .note.urgent[data-kind="dz_back"], .note.urgent[data-kind="dz_warning"] { background: linear-gradient(170deg, #2f6fb3, #1c3f6b); }
+  .note.urgent h4 { font-size: 1.7em; margin-bottom: 4px; }
+  .note.urgent p { font-size: 1em; }
+  .note.urgent .actions { flex-direction: column; }
+  .note.urgent .actions button { background: rgba(255, 255, 255, .18); color: var(--white); padding: 10px; font-size: 1.05em; }
+  .note.urgent .actions button.main { background: var(--white); color: var(--tarmac-deep); }
+  .note.urgent .state { color: rgba(255, 255, 255, .85); }
+  .ring { position: relative; width: 4em; height: 4em; margin: 0 auto 6px; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 4; }
+  .ring .track { stroke: rgba(255, 255, 255, .25); }
+  .ring .fill { stroke: var(--white); stroke-linecap: round; stroke-dasharray: 106.8; transition: stroke-dashoffset .25s linear; }
+  .ring b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-head); font-size: 1.5em; font-weight: 600; }
 
+  .keycell { align-self: end; padding: 12px 14px; background: var(--tarmac); border-radius: 12px; font-size: .88rem; line-height: 1.5; color: var(--ink-soft); }
+  .keycell b { color: var(--white); display: block; margin-bottom: 4px; font-family: var(--font-head); font-size: 1.05rem; font-weight: 600; }
+  .keycell div { display: flex; align-items: center; gap: 8px; }
+  .keycell i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .keycell p { margin: 6px 0 0; }
+
+  @media (max-width: 1500px) { .keycell { display: none; } }
   @media (max-width: 1100px) {
     body { height: auto; overflow: auto; }
     main { grid-template-columns: 1fr; }
-    .phones { grid-template-columns: repeat(2, 1fr); grid-template-rows: none; grid-auto-rows: 260px; }
-    .log ol { max-height: 320px; }
+    .phones { grid-template-columns: repeat(2, 1fr); grid-template-rows: none; grid-auto-rows: 540px; }
+    .phone[data-id="0"] { grid-row: auto; }
+    .log ol { max-height: 300px; }
   }
 </style>
 </head>
 <body>
-<header>
-  <span>SolveX dev</span>
+<header class="topbar">
+  <div class="brand"><i></i>SolveX <span>demo stage</span></div>
+  <div class="scenarios" role="group" aria-label="Scenarios">
+    <button type="button" data-start="a" title="A: ambulance close, medium severity">Crash nearby</button>
+    <button type="button" data-start="b" title="B: ambulance far in traffic, high severity">Serious crash, far ambulance</button>
+    <button type="button" data-start="2" title="2: no one around, ambulance far">Nobody around</button>
+    <button type="button" data-start="3" title="3: no network, no one around">No network</button>
+    <button type="button" data-start="n" title="N: hard braking that is not a crash">False alarm</button>
+  </div>
   <nav>
-    <span id="link" data-up="false" role="status">Connecting to the server</span>
-    <a href="/" target="_blank" rel="noopener">Open the dashboard</a>
-    <a href="/dev/monitor" target="_blank" rel="noopener">Monitor</a>
-    <a href="/dev/live" target="_blank" rel="noopener">Live view</a>
+    <label class="auto" title="If anyone is nearby a witness confirms, and a helper accepts by themselves. Karim never answers."><input type="checkbox" id="auto"> Auto answers</label>
+    <button type="button" class="quiet" id="reset-all">Reset all</button>
+    <span class="link" id="link" data-up="false" role="status">Connecting</span>
+    <a href="/" target="_blank" rel="noopener">Open the operator screen</a>
     <a href="/dev/simulator" target="_blank" rel="noopener">Simulator</a>
-    <button id="reset-all" type="button">Reset all</button>
   </nav>
 </header>
 <main>
-  <div class="col">
-    <section class="panel">
-      <h2>Scenarios</h2>
-      <div class="buttons">
-        <button type="button" data-start="a">Scenario A: ambulance close</button>
-        <button type="button" data-start="b">Scenario B: far, high severity</button>
-        <button type="button" data-start="2">Scenario 2: no one around</button>
-        <button type="button" data-start="3">Scenario 3: no network</button>
-      </div>
-      <label class="auto"><input type="checkbox" id="auto"> Auto: if anyone is nearby a witness confirms, and a helper accepts by themselves. User 0 never answers.</label>
-      <p class="muted" style="margin-top:12px" id="scenario-info">Press a scenario. The crash of user 0's car goes through the real pipeline: M2, then M3 and M4.</p>
-      <p class="muted">From a terminal: <code id="curl"></code></p>
-    </section>
-    <section class="panel scene">
-      <canvas id="scene" width="800" height="450" aria-label="User 0's car"></canvas>
+  <section class="stage">
+    <div class="scene">
+      <div class="scene-head"><b id="scene-title">Press a scenario</b><span id="scene-sub">Every crash goes through the real pipeline.</span></div>
+      <canvas id="scene" width="1600" height="900" aria-label="Karim's car"></canvas>
       <p class="caption" id="caption"></p>
-    </section>
-  </div>
-  <div class="col">
-    <div class="phones" id="phones"></div>
-  </div>
-  <div class="col">
-    <section class="panel log">
+    </div>
+    <ol class="steps" id="steps" aria-label="Where the story is"></ol>
+    <div class="log">
       <h2>Event log</h2>
+      <p class="hint">From a terminal: <code id="curl"></code></p>
       <ol id="log"></ol>
-    </section>
-  </div>
+    </div>
+  </section>
+  <section class="phones" id="phones" aria-label="The phones"></section>
 </main>
 
 <script src="/static/vendor/socketio/socket.io.min.js"></script>
 <script src="/static/common.js"></script>
-<script src="/static/scenes.js"></script>
+<script src="/static/scenes.js?v=2"></script>
 <script>
 const link = document.getElementById("link");
 const phonesEl = document.getElementById("phones");
 const logEl = document.getElementById("log");
 const captionEl = document.getElementById("caption");
+const stepsEl = document.getElementById("steps");
 const canvas = document.getElementById("scene");
 const ctx = canvas.getContext("2d");
+const DPR = canvas.width / W;                    // drawn at twice the size so it stays sharp on a projector
+ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 document.getElementById("curl").textContent = `curl -N http://${location.host}/dev/run/a`;
 
-let snap = null, car = null, phonesSig = "", receivedAt = 0;
+let snap = null, car = null, receivedAt = 0;
 let users = [], notes = {}, sockets = [], agentToken = null;
+const totals = {};              // notification id -> the seconds it started with, for the countdown ring
+const seen = new Set();         // notification ids already shown: only new ones animate
+const everOpen = new Set();     // open notifications that were on a screen: if one is withdrawn it leaves with a message
+let firstPaint = true;
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clock = t => new Date(t * 1000).toLocaleTimeString("en-GB");
+const hhmm = () => new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
 // Every phone is a logged-in user of the real API: the same calls the React Native app makes
 const asUser = (user, method, path, body) => fetch("/api/v1" + path, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${user.token}` },
   body: body === undefined ? undefined : JSON.stringify(body) });
 const allNotes = () => Object.values(notes).flat();
 
+// Nothing of the last run may stay on a phone: the database starts again, so its ids come back too
+function clearPhones() {
+  notes = {};
+  seen.clear(); everOpen.clear();
+  Object.keys(totals).forEach(id => delete totals[id]);
+  renderPhones();
+}
+
 document.querySelectorAll("[data-start]").forEach(b => b.addEventListener("click", async () => {
-  b.disabled = true;
+  clearPhones();
+  document.querySelectorAll("[data-start]").forEach(x => { x.disabled = true; });
   await post(`/dev/start/${b.dataset.start}`);
-  b.disabled = false;
+  document.querySelectorAll("[data-start]").forEach(x => { x.disabled = false; });
   await loadAll();
 }));
-document.getElementById("reset-all").addEventListener("click", async () => { await post("/dev/reset"); await loadAll(); });
+document.getElementById("reset-all").addEventListener("click", async () => { clearPhones(); await post("/dev/reset"); await loadAll(); });
 document.getElementById("auto").addEventListener("change", e => post("/dev/auto", { on: e.target.checked }));
 phonesEl.addEventListener("click", async e => {
   const b = e.target.closest("button[data-note]");
@@ -143,53 +246,148 @@ phonesEl.addEventListener("click", async e => {
   await loadNotes(user);
 });
 
-function phoneHtml(user, list) {
-  // Newest first, but anything with a countdown stays on top
-  const urgent = n => (n.state === "open" && n.remaining_s !== null ? 1 : 0);
-  const items = list.slice().reverse().sort((a, b) => urgent(b) - urgent(a)).map(n => {
-    const answered = n.answer ? n.actions.find(a => a.id === n.answer)?.label : null;
-    const footer = n.state === "open"
-      ? `<div class="actions">${n.actions.map((a, i) => `<button type="button" class="${i === 0 ? "main" : ""}" data-user="${user.id}" data-note="${n.id}" data-action="${a.id}">${esc(a.label)}</button>`).join("")}</div>`
-        + (n.remaining_s !== null ? `<p class="state">Time left: <span class="cd" data-note="${n.id}"></span></p>` : "")
-      : n.state === "answered" ? `<p class="state">Answered: ${esc(answered)}</p>` : n.state === "expired" ? `<p class="state">No answer</p>` : "";
-    return `<div class="note" data-state="${n.state}" data-kind="${n.kind}"><h4>${esc(n.title)}</h4><p>${esc(n.text)}</p>${footer}</div>`;
-  }).join("") || `<p class="idle">No notifications</p>`;
-  return `<article class="phone"><header><b>${user.id}. ${esc(user.name)}</b><span>${esc(user.role)}</span></header><div class="screen">${items}</div></article>`;
+// ---------------------------------------------------------------- phones
+
+function noteHtml(n, user) {
+  const urgent = n.state === "open" && n.remaining_s !== null;
+  const answered = n.answer ? n.actions.find(a => a.id === n.answer)?.label : null;
+  const isNew = !seen.has(n.id) && !firstPaint;
+  if (n.state === "withdrawn") {
+    return everOpen.has(n.id) ? `<div class="note done gone" data-kind="${n.kind}"><h4>${esc(n.title)}</h4><p class="state">Someone else answered first</p></div>` : "";
+  }
+  if (n.state === "open") everOpen.add(n.id);
+  const cls = ["note", urgent ? "urgent" : "", n.state === "answered" || n.state === "expired" ? "done" : "", isNew ? "enter" : ""].filter(Boolean).join(" ");
+  let footer = "";
+  if (n.state === "open") {
+    footer = `<div class="actions">${n.actions.map((a, i) => `<button type="button" class="${i === 0 ? "main" : ""}" data-user="${user.id}" data-note="${n.id}" data-action="${a.id}">${esc(a.label)}</button>`).join("")}</div>`;
+  } else if (n.state === "answered") footer = `<p class="state">Answered: ${esc(answered)}</p>`;
+  else if (n.state === "expired") footer = `<p class="state">No answer</p>`;
+  const ring = urgent ? `<div class="ring" data-note="${n.id}"><svg viewBox="0 0 40 40"><circle class="track" cx="20" cy="20" r="17"/><circle class="fill" cx="20" cy="20" r="17"/></svg><b></b></div>` : "";
+  return `<div class="${cls}" data-kind="${n.kind}">${ring}<h4>${esc(n.title)}</h4><p>${esc(n.text)}</p>${footer}</div>`;
 }
 
-function renderPhones() {
-  const sig = JSON.stringify([users.map(u => [u.id, u.role]), allNotes().map(n => [n.id, n.state, n.answer])]);
-  if (sig === phonesSig) return;
-  phonesSig = sig;
-  phonesEl.innerHTML = users.map(u => phoneHtml(u, notes[u.id] || [])).join("");
+function screenHtml(user, list) {
+  // A question with a countdown first, then the newest
+  const urgent = n => (n.state === "open" && n.remaining_s !== null ? 1 : 0);
+  const items = list.slice().reverse().sort((a, b) => urgent(b) - urgent(a)).map(n => noteHtml(n, user)).join("");
+  return items || `<div class="lock"><b class="now">${hhmm()}</b><span>No notifications</span></div>`;
 }
+
+function signalOf(user) {
+  const phase = snap?.dead_zone?.phase;
+  return user.id === 0 && (phase === "in_zone" || phase === "overdue") ? "none" : "ok";
+}
+
+function ensurePhones() {
+  if (phonesEl.children.length || !users.length) return;
+  phonesEl.innerHTML = users.map(u => `
+    <figure class="phone" data-id="${u.id}">
+      <div class="slot"><div class="device"><div class="screen">
+        <div class="island"></div>
+        <div class="status"><span class="now">${hhmm()}</span><span class="right"><span class="sig"></span><span class="batt"></span></span></div>
+        <div class="notes"></div>
+      </div></div></div>
+      <figcaption class="who"><b>${esc(u.name)}</b><span class="role">${esc(u.role)}</span></figcaption>
+    </figure>`).join("")
+    + `<div class="keycell"><b>The phones</b>
+        <div><i style="background:var(--alarm)"></i>In the accident</div><div><i style="background:var(--blue)"></i>Nearby on foot</div>
+        <div><i style="background:#9aa8b0"></i>Driving on the ambulance's road</div><div><i style="background:var(--clear)"></i>Helpers</div>
+        <p>Each phone is a logged-in user of the real API.</p></div>`;
+}
+
+const phoneSig = {};
+function renderPhones() {
+  ensurePhones();
+  for (const u of users) {
+    const el = phonesEl.querySelector(`.phone[data-id="${u.id}"]`);
+    if (!el) continue;
+    const list = notes[u.id] || [];
+    const sig = JSON.stringify([u.role, signalOf(u), list.map(n => [n.id, n.state, n.answer])]);
+    if (phoneSig[u.id] === sig) continue;
+    phoneSig[u.id] = sig;
+    el.querySelector(".role").textContent = u.role;
+    el.querySelector(".sig").innerHTML = signalOf(u) === "none" ? `<span class="nosignal">No service</span>`
+      : `<span class="bars"><i></i><i></i><i></i><i></i></span>`;
+    const fresh = list.some(n => n.state === "open" && !seen.has(n.id));
+    el.querySelector(".notes").innerHTML = screenHtml(u, list);
+    if (fresh && !firstPaint) { el.classList.remove("buzz"); void el.offsetWidth; el.classList.add("buzz"); }
+    list.forEach(n => seen.add(n.id));
+  }
+  firstPaint = false;
+}
+
+// ---------------------------------------------------------------- the story
 
 function renderLog(s) {
-  logEl.innerHTML = s.events.slice().reverse().map(e => `<li class="${e.who}"><time>${clock(e.t)}</time>${esc(e.text)}</li>`).join("");
+  logEl.innerHTML = s.events.slice().reverse().map(e => `<li class="${e.who}"><time>${clock(e.t)}</time><span>${esc(e.text)}</span></li>`).join("");
+}
+
+const CRASH_STEPS = ["Impact", "Crash model", "People asked", "Agent confirms", "Help sent", "On scene"];
+const ZONE_STEPS = ["Check-in", "Signal lost", "Crash unseen", "Not back", "Help sent", "Found"];
+const NO_CRASH_STEPS = ["Impact", "Crash model", "No crash. Nobody disturbed"];
+const STAGE_RANK = { analyzing: 1, detected: 3, agent_confirmed: 4, dispatched: 5, on_scene: 6, closed: 6 };
+
+function stepRank(s) {
+  const sc = s.scenario, inc = s.incident, dz = s.dead_zone;
+  if (sc.kind === "dead_zone") {
+    if (!dz) return inc ? 1 : 0;
+    if (dz.found) return 6;
+    if (dz.phase === "turned_back" || dz.phase === "returned") return 6;
+    if (inc?.stage === "dispatched") return 5;
+    if (dz.phase === "overdue") return 4;
+    if (dz.phase === "in_zone") return dz.crashed ? 3 : 2;
+    return 1;
+  }
+  if (sc.kind === "no_crash") return !inc ? 0 : inc.stage === "false_alarm" ? 3 : 1;
+  return inc ? (STAGE_RANK[inc.stage] ?? 3) : 0;
+}
+
+function renderSteps(s) {
+  const sc = s.scenario;
+  if (!sc) { stepsEl.innerHTML = ""; stepsEl.dataset.sig = ""; return; }
+  const labels = sc.kind === "dead_zone" ? ZONE_STEPS : sc.kind === "no_crash" ? NO_CRASH_STEPS : CRASH_STEPS;
+  const rank = stepRank(s);
+  const sig = labels.join() + rank;
+  if (stepsEl.dataset.sig === sig) return;
+  stepsEl.dataset.sig = sig;
+  stepsEl.innerHTML = labels.map((l, i) => `<li data-s="${rank >= labels.length ? (i === labels.length - 1 ? "end" : "done") : i < rank ? "done" : i === rank ? "active" : ""}">${esc(l)}</li>`).join("");
 }
 
 function renderControls(s) {
   document.getElementById("auto").checked = s.auto;
+  document.querySelectorAll("[data-start]").forEach(b => { b.dataset.active = String(s.scenario?.key === b.dataset.start); });
   const sc = s.scenario;
-  document.getElementById("scenario-info").textContent = sc
-    ? `${sc.title}. The ambulance's drive is compressed to ${sc.trip_s} s on screen; the ETA shows real minutes.`
-    : "Press a scenario. The crash of user 0's car goes through the real pipeline: M2, then M3 and M4.";
+  document.getElementById("scene-title").textContent = sc ? sc.title : "Press a scenario";
+  document.getElementById("scene-sub").textContent = !sc ? "Every crash goes through the real pipeline."
+    : sc.kind === "no_crash" ? "The trigger fires, the crash model says no."
+    : sc.kind === "dead_zone" ? "No crash signal can reach us in a dead zone."
+    : `Ambulance drive compressed to ${sc.trip_s} s. The ETA is real.`;
 }
 
 function syncAnimation(s) {
   const sc = s.scenario;
-  if (!sc) { car = null; return; }
+  if (!sc) { if (!car || car.runId) car = idleCar(); return; }
   if (!car || car.runId !== sc.device_id) {
-    // The blackbox starts right after the scenario does, with no lead-in: the impact comes 8 s in
-    car = { runId: sc.device_id, kind: "crash", cruise: 20.3, color: "#3b82c4", ctx, scn: null, x: 0, fx: [], result: null, resultAt: 0,
-            impactDone: false, lastSmoke: 0, leadOn: true, idleText: "",
+    const dead = sc.kind === "dead_zone";
+    // The server plays the first skip_s packets in a burst: the drive on screen starts that far in
+    car = { runId: sc.device_id, kind: sc.kind === "no_crash" ? "brake" : "crash", cruise: sc.kind === "no_crash" ? 25 : 20.3,
+            color: sc.kind === "no_crash" ? "#e07b39" : "#3b82c4", ctx, scn: null, x: 0, fx: [], result: null, resultAt: 0,
+            impactDone: false, lastSmoke: 0, leadOn: true, idleText: "", fast: sc.after_x || 1, t0: sc.skip_s || 0,
             // In scenario 3 the car drives first, and the crash starts once it is inside the zone
-            scenarioAt: sc.kind === "dead_zone" ? null : performance.now() - sc.elapsed_s * 1000 };
+            scenarioAt: dead ? null : performance.now() - Math.max(0, sc.elapsed_s - 0.1) * 1000 };
   }
   if (s.dead_zone?.phase === "in_zone" && !car.scn && car.scenarioAt === null) car.scenarioAt = performance.now();
+  // The server has seen the impact, so the screen must not still be driving towards it
+  if (s.incident && sc.kind === "crash" && car.scn) {
+    const t = car.scn.t0 + (performance.now() - car.scn.startAt) / 1000;
+    if (t < IMPACT_S) car.scn.startAt -= (IMPACT_S - t) * 1000;
+  }
   const m2 = s.incident?.m2;
   if (m2 && !car.result) { car.result = m2; car.resultAt = performance.now(); }
 }
+
+const idleCar = () => ({ runId: null, kind: "crash", cruise: 20.3, color: "#3b82c4", ctx, scn: null, x: 0, fx: [], result: null, resultAt: 0,
+                         impactDone: false, lastSmoke: 0, leadOn: true, idleText: "Press a scenario. Karim is driving at 73 km/h.", scenarioAt: null });
 
 function deadZoneCaption(dz) {
   if (dz.phase === "driving") return "Driving towards the no-coverage zone. Everything still reaches the server.";
@@ -201,34 +399,36 @@ function deadZoneCaption(dz) {
 
 function onSnapshot(s) {
   snap = s; receivedAt = performance.now();
-  renderControls(s); renderPhones(); renderLog(s); syncAnimation(s);
+  renderControls(s); renderPhones(); renderLog(s); syncAnimation(s); renderSteps(s);
 }
 
-let lastFrame = performance.now();
+let lastFrame = performance.now(), lastMinute = "";
 function frame() {
   requestAnimationFrame(frame);
   const now = performance.now();
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
   if (car) {
-    if (car.scenarioAt !== null && now >= car.scenarioAt) { car.scn = { startAt: car.scenarioAt, x0: car.x }; car.leadWasVisible = true; car.scenarioAt = null; }
+    if (car.scenarioAt !== null && now >= car.scenarioAt) { car.scn = { startAt: car.scenarioAt, x0: car.x, t0: car.t0 || 0 }; car.leadWasVisible = true; car.scenarioAt = null; }
     const p = update(car, now, dt);
     drawScene(car, now, p);
     const [text, tone] = snap?.dead_zone ? [deadZoneCaption(snap.dead_zone), ""] : captionFor(car, p, now);
     if (captionEl.textContent !== text) captionEl.textContent = text;
     captionEl.dataset.tone = tone;
-  } else {
-    ctx.fillStyle = "#24343d"; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "#b9c4c9"; ctx.font = "32px system-ui, sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("Press a scenario to start", W / 2, H / 2);
-    ctx.textAlign = "left";
-    captionEl.textContent = "";
   }
-  document.querySelectorAll(".cd").forEach(el => {  // the countdowns on the phones
+  const minute = hhmm();
+  if (minute !== lastMinute) { lastMinute = minute; document.querySelectorAll(".now").forEach(el => { el.textContent = minute; }); }
+  document.querySelectorAll(".ring").forEach(el => {  // the countdowns on the phones
     const n = allNotes().find(x => x.id === Number(el.dataset.note));
-    if (n && n.remaining_s !== null) el.textContent = `${Math.max(0, n.remaining_s - (now - n.got) / 1000).toFixed(0)} s`;
+    if (!n || n.remaining_s === null) return;
+    const left = Math.max(0, n.remaining_s - (now - n.got) / 1000);
+    totals[n.id] = Math.max(totals[n.id] || 0, n.remaining_s);
+    el.querySelector(".fill").style.strokeDashoffset = String(106.8 * (1 - left / totals[n.id]));
+    el.querySelector("b").textContent = Math.ceil(left);
   });
 }
+
+// ---------------------------------------------------------------- data
 
 async function loadNotes(user) {
   const list = await (await asUser(user, "GET", "/notifications")).json();
@@ -251,10 +451,10 @@ function refreshSoon() { clearTimeout(soon); soon = setTimeout(() => loadAll().c
 function connect() {
   // The agent's socket says when something changed; each phone listens as its own user
   const agent = io({ auth: { token: agentToken }, transports: ["websocket", "polling"] });
-  agent.on("connect", () => { link.textContent = "Connected to the server"; link.dataset.up = "true"; refreshSoon(); });
+  agent.on("connect", () => { link.textContent = "Connected"; link.dataset.up = "true"; refreshSoon(); });
   agent.on("disconnect", () => { link.textContent = "Server not reachable. Retrying."; link.dataset.up = "false"; });
   agent.on("incident.updated", refreshSoon);
-  agent.on("reset", refreshSoon);
+  agent.on("reset", () => { clearPhones(); refreshSoon(); });
   for (const user of users) {
     const phone = io({ auth: { token: user.token }, transports: ["websocket", "polling"] });
     phone.on("notification", n => {
@@ -270,9 +470,9 @@ function connect() {
   setInterval(() => loadAll().catch(() => {}), 2000);   // the state that is not an event: the scenario clock, the dead-zone phase
 }
 
+car = idleCar();
 loadAll().then(connect).catch(() => { link.textContent = "Server not reachable. Retrying."; });
 requestAnimationFrame(frame);
-
 </script>
 </body>
 </html>

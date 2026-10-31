@@ -44,7 +44,7 @@ A crash from a blackbox whose owner is known opens an incident for that person, 
  "state": "open", "answer": null, "remaining_s": 14.2, "incident_id": 3, "data": {}, "sent_at": "2026-10-30T12:00:00.000Z"}
 ```
 
-`state` is `open` (waiting for an answer), `answered`, `expired` (nobody answered by the deadline) or `delivered` (no answer needed). `remaining_s` counts down to the deadline, `null` if there is none.
+`state` is `open` (waiting for an answer), `answered`, `expired` (nobody answered by the deadline), `withdrawn` (someone else answered first, or the agent confirmed: remove it from the screen) or `delivered` (no answer needed). `remaining_s` counts down to the deadline, `null` if there is none.
 
 | `kind` | Sent to | Actions | Deadline |
 |---|---|---|---|
@@ -124,7 +124,7 @@ Rooms are chosen from the token: `user:{id}` for everyone, `dispatchers`, `hospi
 
 | Event | Goes to | Payload |
 |---|---|---|
-| `notification` | that user, also when one of theirs changes state (answered, expired). Replace yours by `id`. | the notification object above |
+| `notification` | that user, also when one of theirs changes state (answered, expired, withdrawn). Replace yours by `id`. | the notification object above |
 | `incident.updated` | dispatchers, and `incident:{id}` | the incident summary. Fetch `GET /incidents/{id}` for the rest. |
 | `ambulance.moved` | dispatchers | the ambulance, its `location`, `eta_remaining_s` |
 | `hospital.incoming` | that hospital | the patient, or `{incident_id, cancelled: true}` |

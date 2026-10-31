@@ -99,7 +99,8 @@ def make_app():
             legs = {leg: {"path": r[leg]["path"], "length": r[leg]["length"],
                           "speeds": [[s["a"], s["b"], s["vma"]] for s in r[leg]["segments"]]}
                     for leg in ("main", "alt") if leg in r}
-            out.append({"id": p["id"], "name": p["name"], "blurb": p["blurb"], "clock": p["clock"],
+            out.append({"id": p["id"], "name": p["name"], "blurb": p["blurb"], "demo": p["demo"],
+                        "demo_start_m": p["demo_start_m"], "clock": p["clock"],
                         "branch_m": r.get("branch_m"), **legs})
         return out
 

@@ -22,7 +22,7 @@ from backend.models import (Ambulance, Centre, DeadZoneCheckin, Device, Dispatch
                             Notification, PatientTransfer, User)
 from backend.notifications.service import notify
 from backend.sim import blackbox as bbx
-from backend.sim.data import (AGENT, AMBULANCES, AUTO, CHECKIN_S, DEAD_ZONE, DEMO_PASSWORD, HOSPITALS, PARKED_SPREAD, PLACES, ROLES, SCENARIOS, STAFF,
+from backend.sim.data import (AGENT, AMBULANCES, AUTO, CHECKIN_S, DEAD_ZONE, DEMO_PASSWORD, HOSPITALS, PARKED_SPREAD, PLACES, REPLAY, ROLES, SCENARIOS, STAFF,
                               USERS)
 from backend.telemetry.service import service as telemetry
 from backend.users import service as users
@@ -43,14 +43,23 @@ class Replies:
 
 
 class Blackbox:
-    def __init__(self, scenario, lead_in_s=bbx.LEAD_IN_S, location=None):
+    def __init__(self, scenario, lead_in_s=bbx.LEAD_IN_S, location=None, fast=False):
         self.scenario, self.lead_in_s, self.location = scenario, lead_in_s, location   # location: fn() -> (lat, lon) or a tuple
+        self.fast = fast
         self.started = time.monotonic()
         self.stopped, self.stopped_by = False, "a reset on the server"
 
     def started_message(self, device_id):
         return {"type": "blackbox_started", "device_id": device_id, "scenario": self.scenario, "lead_in_s": self.lead_in_s,
                 "elapsed_s": time.monotonic() - self.started}
+
+    def gap(self, seq):
+        """Seconds to wait before sending packet `seq`. Real time, except in the demo's scenarios (see REPLAY)."""
+        if not self.fast:
+            return 1
+        if seq < REPLAY["skip_s"]:
+            return 0.02
+        return 1 / REPLAY["after_x"] if bbx.IMPACT_SEQ < seq < bbx.IMPACT_SEQ + 8 else 1
 
     def where(self):
         return self.location() if callable(self.location) else self.location
@@ -210,7 +219,7 @@ class Sim:
         geo = PLACES[s["place"]]
         # The recording is the same in every scenario; in scenario 3 it is a drive with no crash the server can see
         location = (lambda: tuple(self.dz["car"])) if dead else tuple(geo["crash"])
-        bb = Blackbox("normal" if dead else "crash", lead_in_s=0, location=location)
+        bb = Blackbox("normal" if dead else s.get("recording", "crash"), lead_in_s=0, location=location, fast=not dead)
         self.blackboxes[self.device_id] = bb
         if run_blackbox:
             self.spawn(self.consume(self.run_blackbox(self.device_id, bb)))
@@ -244,7 +253,7 @@ class Sim:
             await self.tell_monitors(bb.started_message(device_id))
             yield f"{device_id}: {bb.scenario}. Press Ctrl+C to stop.\n\n"
             for seq, (stage, packet) in enumerate(bbx.scenario_packets(bb.scenario, bb.lead_in_s)):
-                next_at += 1     # a second is sent once it is complete, so the prediction comes 8 s after the impact
+                next_at += bb.gap(seq)     # a second is sent once it is complete, so the prediction comes 8 s after the impact
                 await asyncio.sleep(max(0, next_at - time.monotonic()))
                 if bb.stopped:
                     yield f"\nStopped by {bb.stopped_by}.\n"
@@ -292,7 +301,7 @@ class Sim:
                     "back": {k: list(v) for k, v in d["back"].items()}}
             await notify(s, victim.id, "dz_back", "No network ahead",
                          f"In about 15 minutes you enter a zone with no network, on {d['road']}. When do you expect to be back?",
-                         [{"id": k, "label": v[0]} for k, v in d["back"].items()], settings.checkin_s, data=data)
+                         [{"id": k, "label": v[0]} for k, v in d["back"].items()], d["answer_s"], data=data)
             self.say("The app asked the driver when they expect to be back.", "dead_zone")
         if dz["phase"] == "driving":
             trip = dz["trip"]
@@ -388,7 +397,9 @@ class Sim:
             sc = SCENARIOS.get(self.scenario)
             if sc:
                 out["scenario"] = {"key": self.scenario, "title": sc["title"], "device_id": self.device_id, "kind": sc.get("kind", "crash"),
-                                   "elapsed_s": time.monotonic() - self.run_started, "trip_s": sc["trip_s"], "traffic": sc["traffic"]}
+                                   "elapsed_s": time.monotonic() - self.run_started, "trip_s": sc["trip_s"], "traffic": sc["traffic"],
+                                   "skip_s": 0 if sc.get("kind") == "dead_zone" else REPLAY["skip_s"],
+                                   "after_x": 1 if sc.get("kind") == "dead_zone" else REPLAY["after_x"]}
                 q = select(Incident).order_by(Incident.id.desc())
                 q = q.where(Incident.victim_id == self.ids[0], Incident.kind == "dead_zone") if sc.get("kind") == "dead_zone" \
                     else q.where(Incident.device_id == self.device_id)

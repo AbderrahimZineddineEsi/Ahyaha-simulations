@@ -132,3 +132,9 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--line); out
   .mapwrap { min-height: 360px; }
 }
 @media (prefers-reduced-motion: reduce) { .banner, .p-full, .log tr.fresh td { animation: none; } }
+
+.controls .check { cursor: pointer; }
+.controls button.big { min-width: 110px; background: var(--line); color: var(--tarmac); }
+.controls button.big.paused { background: var(--very); color: var(--white); }
+.controls button[aria-pressed="true"] { background: var(--blue); }
+.p-paused { position: absolute; z-index: 50; left: 50%; top: 8px; transform: translateX(-50%); padding: 4px 12px; background: var(--tarmac); color: var(--white); font-size: .8rem; border-radius: 12px; white-space: nowrap; pointer-events: none; }

@@ -77,6 +77,13 @@ async def alert_witnesses(s, inc):
     return len(found)
 
 
+async def withdraw_witnesses(s, inc, except_id=None):
+    """The crash has an answer (the victim, a witness, an SOS or the agent), so the other people nearby are no longer asked."""
+    n = await notifications.expire_open(s, inc.id, ("witness",), state="withdrawn", except_id=except_id)
+    if n:
+        say(s, inc, f"Alert withdrawn from {n} {'person' if n == 1 else 'people'} nearby: it has an answer.", kind="notification")
+
+
 async def sos_card(s, inc):
     await notify(s, inc.victim_id, "sos", "Can't talk or move?", "Use this at any time, even after the check above ends.",
                  [{"id": "silent", "label": "Silent SOS"}, {"id": "voice", "label": "Voice SOS"}], incident_id=inc.id)
@@ -237,9 +244,8 @@ async def respond(s, note, action):
             await apply_sos(s, inc, user, action)
         elif kind == "witness" and action == "confirm":
             core.raise_confidence(inc)
-            confirmed = await s.scalar(select(Notification.id).where(Notification.incident_id == inc.id, Notification.kind == "witness",
-                                                                    Notification.answer == "confirm", Notification.id != note.id))
-            say(s, inc, f"Another witness confirmed: {who}." if confirmed else f"Witness confirmed: {who}.", kind="witness")
+            say(s, inc, f"Witness confirmed: {who}.", kind="witness")
+            await withdraw_witnesses(s, inc, except_id=note.id)
         elif kind == "witness":
             confirmed = await s.scalar(select(Notification.id).where(Notification.incident_id == inc.id, Notification.kind == "witness",
                                                                     Notification.answer == "confirm"))
@@ -248,6 +254,8 @@ async def respond(s, note, action):
             say(s, inc, f"{who} says there was no accident near them. Confidence {inc.confidence}.", kind="witness")
         elif kind == "helper":
             await fleet.on_helper_answer(s, inc, note, user, action)
+        if kind == "check" and note.user_id == inc.victim_id:
+            await withdraw_witnesses(s, inc)
         publish(s, inc)
     await db.commit(s)
     return "ok"
@@ -266,6 +274,7 @@ async def apply_sos(s, inc, user, action):
         say(s, inc, f"Silent SOS from {user.name}: the crash is verified. They can't talk. Severity: at least high.", kind="sos")
     else:
         say(s, inc, f"Voice SOS from {user.name}: the crash is verified and they are on the line. Ask how they are.", kind="sos")
+    await withdraw_witnesses(s, inc)
 
 
 async def sos(s, user, action):
@@ -318,6 +327,7 @@ async def agent_confirm(s, inc, severity=None):
     if inc.status == "detected":
         inc.status = "agent_confirmed"
     say(s, inc, f"You confirmed the crash. Severity: {level}.", kind="agent")
+    await withdraw_witnesses(s, inc)
     publish(s, inc)
     return "ok"
 

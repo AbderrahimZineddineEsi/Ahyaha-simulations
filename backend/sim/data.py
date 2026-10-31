@@ -9,8 +9,11 @@ HERE = Path(__file__).resolve().parent
 ROUTES_FILE = HERE / "data" / "demo_routes.json"
 PLACES = json.loads(ROUTES_FILE.read_text())  # where a crash can happen: "town" and "remote"
 
-CHECKIN_S = 15         # how long user 0 has to answer "Are you OK?" (the spec says 30 s; shorter for a demo)
-AUTO = {"witness_s": 18, "helper_s": 3}  # when the Auto switch answers: seconds after the alert, and after the call for help
+CHECKIN_S = 10         # how long user 0 has to answer "Are you OK?" (the spec says 30 s; shorter for a demo)
+AUTO = {"witness_s": 12, "helper_s": 2}  # when the Auto switch answers: seconds after the alert, and after the call for help
+# The blackbox replay is sped up so the demo fits a presentation. M2 counts packets, not seconds, so it reads the same 16 s:
+# the first skip_s packets go in a burst, up to the impact at real speed (the audience sees the approach), the 8 s after it at after_x.
+REPLAY = {"skip_s": 6, "after_x": 6}
 DEMO_PASSWORD = "demo"
 AGENT = {"phone": "+213000000100", "name": "Agent Protection Civile", "role": "dispatcher"}
 STAFF = [
@@ -52,8 +55,8 @@ SCENARIOS = {
     "a": {
         "title": "A: ambulance close, medium severity",
         "traffic": 1.0,   # the ambulance's drive takes as long as the road says
-        "trip_s": 30,     # and is compressed to this many seconds on screen
-        "helper_trip_s": 18,
+        "trip_s": 15,     # and is compressed to this many seconds on screen
+        "helper_trip_s": 10,
         "place": "town",
         "case": {"dv_kmh": 24, "pdof_deg": 10, "rollover": 0, "multi_impact": 0, "body": "car"},
         "case_source": "CISS 2018 case 2018_1-13-2018-099-02_2_1: dv 24 km/h, frontal, one impact. The real person had a moderate injury (MAIS 2).",
@@ -62,8 +65,8 @@ SCENARIOS = {
     "b": {
         "title": "B: ambulance far in traffic, high severity",
         "traffic": 2.5,   # heavy traffic
-        "trip_s": 60,
-        "helper_trip_s": 18,
+        "trip_s": 25,
+        "helper_trip_s": 10,
         "place": "town",
         "case": {"dv_kmh": 67, "pdof_deg": 0, "rollover": 0, "multi_impact": 1, "body": "car"},
         "case_source": "CISS 2018 case 2018_1-20-2018-108-02_1_1: dv 67 km/h, frontal, several impacts. The real person had a serious injury (MAIS 3) and survived.",
@@ -72,18 +75,27 @@ SCENARIOS = {
     "2": {
         "title": "2: no one around, ambulance far",
         "traffic": 1.0,
-        "trip_s": 60,
-        "helper_trip_s": 25,
+        "trip_s": 25,
+        "helper_trip_s": 12,
         "place": "remote",
         "case": {"dv_kmh": 50, "pdof_deg": 0, "rollover": 0, "multi_impact": 1, "body": "car"},
         "case_source": "CISS 2021 case 2021_1-73-2021-056-08_1_1: dv 50 km/h, frontal, several impacts. The real person had a serious injury (MAIS 3) and survived.",
         "expect": "high",
     },
+    "n": {
+        "title": "N: hard braking, no crash",
+        "traffic": 1.0,
+        "trip_s": 15,
+        "helper_trip_s": 10,
+        "place": "town",
+        "kind": "no_crash",    # the trigger fires, M2 says no crash: nobody is disturbed
+        "recording": "braking",
+    },
     "3": {
         "title": "3: no network, no one around",
         "traffic": 1.0,
-        "trip_s": 60,
-        "helper_trip_s": 25,
+        "trip_s": 25,
+        "helper_trip_s": 12,
         "place": "remote",
         "kind": "dead_zone",   # no crash signal can arrive: no severity case either
     },
@@ -93,11 +105,12 @@ SCENARIOS = {
 DEAD_ZONE = {
     "road": "RN 8B",
     "start_m": 13000, "entry_m": 6000,   # where the driver starts, and where the signal is lost
-    "ask_s": 3,          # when the app asks about the return (the spec: about 15 min before the zone)
-    "drive_s": 40,       # seconds on screen until the driver reaches the zone
-    "crash_after_s": 8,  # in the zone, unseen by the server
-    "overdue_after_s": 30,   # the promised return time, compressed
+    "ask_s": 1,          # when the app asks about the return (the spec: about 15 min before the zone)
+    "answer_s": 5,       # the time the driver has to say when they will be back
+    "drive_s": 18,       # seconds on screen until the driver reaches the zone
+    "crash_after_s": 3,  # in the zone, unseen by the server
+    "overdue_after_s": 10,   # the promised return time, compressed
     "back": {"1h": ("In 1 hour", 60), "eta30": ("ETA + 30 min", 55), "long": ("Longer stay, 3 hours", 180)},
     "default": "eta30",  # with no answer, the app uses the route's ETA
-    "silence_s": 4,      # a driver silent this long inside the zone counts as being in it
+    "silence_s": 3,      # a driver silent this long inside the zone counts as being in it
 }

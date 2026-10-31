@@ -58,19 +58,69 @@ async def test_nobody_around_keeps_confidence_high(make, env):
     assert inc.user_state == "ok" and inc.confidence == "high"
 
 
-async def test_ok_lowers_confidence_when_people_are_near_and_a_witness_raises_it(make, env):
+async def test_ok_lowers_confidence_when_people_are_near(make, env):
     karim = await make("Karim", at=SPOT)
-    yacine = await make("Yacine", at=NEAR)
+    await make("Yacine", at=NEAR)
     await register_device("bb-1", karim)
     await crash()
     check = (await notes(karim, "check"))[0]
     await karim.post(f"/notifications/{check.id}/respond", {"action": "ok"})
     assert (await get_incident()).confidence == "medium"
+
+
+async def test_a_witness_confirming_raises_confidence_and_withdraws_the_others(make, env):
+    karim = await make("Karim", at=SPOT)
+    yacine = await make("Yacine", at=NEAR)
+    lina = await make("Lina", at=NEAR)
+    await register_device("bb-1", karim)
+    await crash()
     witness = (await notes(yacine, "witness"))[0]
-    await yacine.post(f"/notifications/{witness.id}/respond", {"action": "confirm"})
+    assert (await yacine.post(f"/notifications/{witness.id}/respond", {"action": "confirm"})).status_code == 200
     assert (await get_incident()).confidence == "high"
-    again = await yacine.post(f"/notifications/{witness.id}/respond", {"action": "deny"})
-    assert again.status_code == 409     # it was already answered
+    assert (await notes(yacine, "witness"))[0].state == "answered"
+    other = (await notes(lina, "witness"))[0]
+    assert other.state == "withdrawn"
+    assert (await lina.post(f"/notifications/{other.id}/respond", {"action": "deny"})).status_code == 409
+    assert (await yacine.post(f"/notifications/{witness.id}/respond", {"action": "deny"})).status_code == 409
+
+
+async def test_the_victim_answering_withdraws_the_witness_prompts(make, env):
+    karim = await make("Karim", at=SPOT)
+    yacine = await make("Yacine", at=NEAR)
+    await register_device("bb-1", karim)
+    await crash()
+    check = (await notes(karim, "check"))[0]
+    await karim.post(f"/notifications/{check.id}/respond", {"action": "help"})
+    assert (await notes(yacine, "witness"))[0].state == "withdrawn"
+
+
+async def test_silent_sos_withdraws_the_witness_prompts(make, env):
+    karim = await make("Karim", at=SPOT)
+    yacine = await make("Yacine", at=NEAR)
+    await register_device("bb-1", karim)
+    await crash()
+    assert (await karim.post("/sos", {"kind": "silent"})).status_code == 200
+    assert (await notes(yacine, "witness"))[0].state == "withdrawn"
+
+
+async def test_a_check_in_that_times_out_leaves_the_witness_prompts_open(make, env):
+    karim = await make("Karim", at=SPOT)
+    yacine = await make("Yacine", at=NEAR)
+    await register_device("bb-1", karim)
+    await crash()
+    env.advance(settings.checkin_s + 1)
+    await scheduler.tick()
+    assert (await notes(yacine, "witness"))[0].state == "open"
+
+
+async def test_a_denial_does_not_withdraw_the_others(make, env):
+    karim = await make("Karim", at=SPOT)
+    yacine = await make("Yacine", at=NEAR)
+    lina = await make("Lina", at=NEAR)
+    await register_device("bb-1", karim)
+    await crash()
+    await yacine.post(f"/notifications/{(await notes(yacine, 'witness'))[0].id}/respond", {"action": "deny"})
+    assert (await notes(lina, "witness"))[0].state == "open"
 
 
 async def test_a_denial_with_no_confirmation_lowers_confidence(make, env):

@@ -1,8 +1,14 @@
 # Demo script
 
-Two screens: the **dashboard** (`/`) is what the Protection Civile agent sees (it logs in as the demo agent, phone `+213000000100`, password `demo`), and **dev** (`/dev`) plays everyone else: user 0 in the accident, and users 1 to 5 on their phones. Each phone is a logged-in user of the real API, exactly what the React Native app will do. Everything is made up, apart from the severity cases.
+Two screens: the **operator screen** (`/`) is what the Protection Civile agent sees (it logs in as the demo agent, phone `+213000000100`, password `demo`), and the **demo stage** (`/dev`) plays everyone else: Karim's car with a pipeline bar under it, and six phones drawn as phones (Karim's is the big one). Each phone is a logged-in user of the real API, exactly what the React Native app will do. Everything is made up, apart from the severity cases.
 
 Open both before you start. Press **Reset all** on `/dev` between runs. In demo mode **Reset all** deletes the incidents, notifications and dispatches in the database, so run the demo on its own database (`DATABASE_URL`), never on real data.
+
+**Operator layout.** Left: the incidents list, the ambulances (the fastest one is marked once you can dispatch) and the hospitals (the suggested one first, **Send patient** on each). Middle: the map, with the agent's last actions as short lines that fade after 7 s. Right: the incident, as before. There is no log on this screen: the full log is on `/dev`.
+
+**Scenarios are sped up** so the demo fits a presentation: the blackbox replay skips the first 6 s and plays the 8 s after the impact at 6x, so the car hits the wall about 2 s after you press the button and "Are you OK?" arrives about 4 s after it (it was 17 s). The crash model reads the same 16 s, because it counts packets, not seconds. The check-in lasts 10 s (the spec says 30).
+
+**When someone answers, the others are not asked any more.** If Karim answers "Are you OK?" (either button), a witness confirms, someone presses an SOS, or the agent presses Confirm crash, the witness prompts on the other phones show "Someone else answered first" and go away. If nobody answers, they stay until a witness confirms.
 
 ## What the audience should understand
 
@@ -15,12 +21,12 @@ Open both before you start. Press **Reset all** on `/dev` between runs. In demo 
 ### A: the ambulance is close, severity medium
 
 1. On `/dev`, press **Scenario A**. User 0's car heads for a wall.
-2. **Dashboard, 9 s in:** "Analyzing the trigger". The agent already sees the impact.
-3. **16 s in:** "High confidence". Severity **medium (3.2%)**, check first: legs. 'Are you OK?' went to user 0 and an alert to the 5 people nearby.
-4. **15 s later:** "High confidence, user not responding". (User 0 stays silent. Pressing "I'm OK" on their phone would lower the confidence instead.)
+2. **Operator screen, about 3 s in:** "Analyzing the trigger". The agent already sees the impact.
+3. **About 4 s in:** "High confidence". Severity **medium (3.2%)**, check first: legs. 'Are you OK?' went to user 0 and an alert to the 5 people nearby.
+4. **10 s later:** "High confidence, user not responding". (User 0 stays silent. Pressing "I'm OK" on their phone would lower the confidence instead.)
 5. On `/dev`, press **Confirm** on user 1's phone. Dashboard: "confirmed by witness".
 6. The agent has called the person's family or the witness. On the dashboard press **Confirm crash**.
-7. Press **Dispatch** on Ambulance 1: ETA about 7 minutes. Watch it drive on the map (30 s on screen).
+7. Press **Dispatch** on Ambulance 1: ETA about 7 minutes. Watch it drive on the map (15 s on screen).
 8. As it nears users 2 and 3, their phones get "Ambulance coming. Clear the yellow line." (once each). The dashboard timeline shows both.
 9. "Ambulance 1 is on the scene."
 
@@ -38,7 +44,7 @@ Open both before you start. Press **Reset all** on `/dev` between runs. In demo 
 A crash on RN 8B, 24 km south of Bouira. The map switches to that road by itself. The nearest person is over 8 km away.
 
 1. On `/dev`, press **Scenario 2**. Leave Auto on if you want the helper to accept by herself.
-2. **16 s in:** "High confidence, nobody nearby". Severity **high (41.7%)**. No witness alert goes out, because nobody is within 2.5 km. Only user 0's phone rings: the check-in, and a card with **Silent SOS** and **Voice SOS** that stays available.
+2. **About 4 s in:** "High confidence, nobody nearby". Severity **high (41.7%)**. No witness alert goes out, because nobody is within 2.5 km. Only user 0's phone rings: the check-in, and a card with **Silent SOS** and **Voice SOS** that stays available.
 3. Whatever the driver does, confidence stays high: nobody can confirm, and "I'm OK" could be wrong. Press **Call Karim** on the dashboard. If they haven't answered, the call goes unanswered too. **Call the contact** is the other option.
 4. **Confirm crash**, with the severity you have.
 5. **Dispatch** Ambulance 1: ETA about **23 minutes**. That's too long, so look at the helpers.
@@ -68,19 +74,23 @@ No crash signal can reach us in a dead zone, so the safety net comes first: the 
 7. On the panel, **Call for help** and **Dispatch**: the help heads past the last known position, along the planned route.
 8. The first to arrive finds Karim. Only then does the agent learn it was a crash.
 
+## Scenario N, false alarm (the quick one)
+
+Press **False alarm** on `/dev`. The car brakes hard, the sensor passes 1 g, the crash model says no. About 4 s in, the bar ends on "No crash. Nobody disturbed." and no phone rings: this is why a trigger alone does not wake anyone.
+
 ## Two incidents at once
 
 Start any scenario, then in a terminal run `curl -N http://<server>:8000/blackbox/friend-01/crash`. A second incident appears in the dashboard's **Incidents** list, "Unknown person": nobody is registered for that blackbox, so there is no check-in and no profile, and severity assumes a default adult. Click either incident to switch. (The two don't merge because the unknown blackbox is 3 km away from the scenarios' crashes; two reports within 300 m and 5 minutes are one incident.)
 
 ## Hospital
 
-Once M2 has detected a crash, the **Hospital** card on the dashboard lists hospitals with the suggested one first (free beds, distance, and the specialties M4's likely injuries call for: head goes to neurosurgery). **Send patient** sends them there. A hospital user (`+213000000101` Bouira, `+213000000102` Alger, password `demo`) sees only their own incoming patients through `GET /api/v1/hospitals/{id}/incoming`; there is no hospital page yet.
+Once M2 has detected a crash, the **Hospital** card on the dashboard lists hospitals with the suggested one first (free beds, distance, and the specialties M4's likely injuries call for: head goes to neurosurgery). **Send patient** sends them there. A hospital user (`+213000000101` Bouira, `+213000000102` Alger, password `demo`) sees only their own incoming patients through `GET /api/v1/hospitals/{id}/incoming`; there is no hospital page yet. On the operator screen the hospitals are in the left column.
 
 ## Notes for the pitch
 
 - The blackbox recording is the same in every scenario, so it can't give different severities. Each scenario uses a **real crash case from the NHTSA CISS database**, run through M3 and M4. Say so if asked: the blackbox's own ΔV measurement is shown in the dev log, and is not used yet.
-- The ambulance's drive is compressed (30 s for A, 60 s for B); the ETA shows real minutes.
+- The ambulance's drive is compressed (15 s for A, 25 s for B and 2); the ETA shows real minutes.
 - Phone numbers and people are fictional. The map's streets come from OpenStreetMap.
 - Voice SOS is a button here. In the app it is a spoken phrase (Vosk), which isn't built yet. There is no phone line either: Call is a mock.
-- In scenario 3 the return time is compressed: the 30 s in the zone stand for the hour the driver promised. The grey zone is made up; in the real app it comes from OpenCelliD and our users' signal logs. Calling the Gendarmerie is a timeline line, not a real alert.
+- In scenario 3 the return time is compressed: the 10 s in the zone stand for the hour the driver promised, and the driver has 5 s to say when they will be back. The grey zone is made up; in the real app it comes from OpenCelliD and our users' signal logs. Calling the Gendarmerie is a timeline line, not a real alert.
 - The hospital page is not built yet: the API and the destination choice are.
