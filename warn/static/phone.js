@@ -2,7 +2,7 @@
 // The phone's screens. Draws what the scan decided; makes no decisions of its own.
 const PhoneUI = (() => {
   const $ = (id) => document.getElementById(id);
-  const COLORS = { low: "#5aa583", medium: "#e8c547", high: "#ee8a2b", "very high": "#c8231b", none: "#8a979c" };
+  const COLORS = { low: "#2A7F6F", medium: "#D9A400", high: "#C9560F", "very high": "#D21034", none: "#8A9189" };
   const LABEL = { low: "Low risk", medium: "Medium risk", high: "High risk", "very high": "Very high risk" };
   const AUTO_COLLAPSE_MS = 60000;
   // Ribbon geometry (SVG units): the car at the bottom, LOOK_M metres ahead at the top
@@ -98,11 +98,11 @@ const PhoneUI = (() => {
   function renderRibbon({ scored, m, windowEnd, alerts }) {
     const Y = (d) => CAR_Y - (d - m) * PX_PER_M;
     const clipY = (y) => Math.min(CAR_Y, Math.max(TOP_Y, y));
-    let svg = `<rect x="${RX}" y="${TOP_Y}" width="${RW}" height="${CAR_Y - TOP_Y}" fill="#dfe5e5"/>`;
+    let svg = `<rect x="${RX}" y="${TOP_Y}" width="${RW}" height="${CAR_Y - TOP_Y}" fill="#E6E1D5"/>`;
     for (let k = 0; k <= 3; k++) {
       const y = CAR_Y - k * 1000 * PX_PER_M;
-      svg += `<line x1="104" x2="124" y1="${y}" y2="${y}" stroke="#8a979c"/>` +
-             `<text x="98" y="${y + 4}" text-anchor="end" font-size="12" fill="#5d6e76">${k === 0 ? "now" : k + " km"}</text>`;
+      svg += `<line x1="104" x2="124" y1="${y}" y2="${y}" stroke="#8A9189"/>` +
+             `<text x="98" y="${y + 4}" text-anchor="end" font-size="12" fill="#5C675F">${k === 0 ? "now" : k + " km"}</text>`;
     }
     let town = null;
     for (const s of scored) {
@@ -113,15 +113,15 @@ const PhoneUI = (() => {
       const mid = clipY(Y((seg.a + seg.b) / 2));
       if (seg.int > 1) {
         const g = seg.int === 6 ? "○" : seg.int === 3 ? "T" : "✕";
-        svg += `<text x="188" y="${(mid + 4).toFixed(1)}" font-size="13" font-weight="700" fill="#24343d" text-anchor="middle">${g}</text>`;
+        svg += `<text x="188" y="${(mid + 4).toFixed(1)}" font-size="13" font-weight="700" fill="#14201A" text-anchor="middle">${g}</text>`;
       } else if (seg.plan > 1) {
         const g = seg.plan === 2 ? "↰" : seg.plan === 3 ? "↱" : "S";
-        svg += `<text x="188" y="${(mid + 4).toFixed(1)}" font-size="13" fill="#5d6e76" text-anchor="middle">${g}</text>`;
+        svg += `<text x="188" y="${(mid + 4).toFixed(1)}" font-size="13" fill="#5C675F" text-anchor="middle">${g}</text>`;
       }
       if (seg.agg === 2) {
-        svg += `<rect x="204" y="${y1.toFixed(1)}" width="4" height="${(y2 - y1).toFixed(1)}" fill="#7a8b94"/>`;
+        svg += `<rect x="204" y="${y1.toFixed(1)}" width="4" height="${(y2 - y1).toFixed(1)}" fill="#8A9189"/>`;
         if (seg.town && seg.town !== town) {
-          svg += `<text x="212" y="${(clipY(Y(seg.a)) - 3).toFixed(1)}" font-size="11" fill="#5d6e76">${escape(seg.town)}</text>`;
+          svg += `<text x="212" y="${(clipY(Y(seg.a)) - 3).toFixed(1)}" font-size="11" fill="#5C675F">${escape(seg.town)}</text>`;
         }
       }
       town = seg.agg === 2 ? seg.town : null;
@@ -129,17 +129,17 @@ const PhoneUI = (() => {
     // not scanned yet: the window ends before the top of the ribbon
     if (windowEnd < m + LOOK_M) {
       const y = clipY(Y(windowEnd));
-      if (y > TOP_Y) svg += `<rect x="${RX}" y="${TOP_Y}" width="${RW}" height="${(y - TOP_Y).toFixed(1)}" fill="#dfe5e5"/>`;
+      if (y > TOP_Y) svg += `<rect x="${RX}" y="${TOP_Y}" width="${RW}" height="${(y - TOP_Y).toFixed(1)}" fill="#E6E1D5"/>`;
     }
     svg += `<line x1="${RX + RW / 2}" x2="${RX + RW / 2}" y1="${TOP_Y}" y2="${CAR_Y}" stroke="#fff" stroke-width="2" stroke-dasharray="7 9" opacity=".85"/>`;
     for (const a of alerts) {
       const y1 = clipY(Y(a.b)), y2 = clipY(Y(a.a));
       if (y2 - y1 < 1) continue;
-      const color = a.level === "very high" ? "#c8231b" : "#c4660d";
+      const color = a.level === "very high" ? "#D21034" : "#C9560F";
       svg += `<path d="M296 ${y1.toFixed(1)}h6v${(y2 - y1).toFixed(1)}h-6" fill="none" stroke="${color}" stroke-width="3"/>` +
              `<text transform="translate(290 ${((y1 + y2) / 2).toFixed(1)}) rotate(-90)" text-anchor="middle" font-size="11" font-weight="700" fill="${color}">${fmtKm(a.b - a.a)} ${a.level === "very high" ? "very high" : "high"}</text>`;
     }
-    svg += `<path d="M150 ${CAR_Y - 10}l9 22h-18z" fill="#2f6fb3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>`;
+    svg += `<path d="M150 ${CAR_Y - 10}l9 22h-18z" fill="#006233" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>`;
     $("ribbon").innerHTML = svg;
   }
 

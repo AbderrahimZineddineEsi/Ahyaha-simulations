@@ -1,10 +1,10 @@
 "use strict";
 // The left side: the car on the map, and the road coloured only where the phone has already scanned it.
 const MapView = (() => {
-  const COLORS = { low: "#5aa583", medium: "#e8c547", high: "#ee8a2b", "very high": "#c8231b" };
+  const COLORS = { low: "#2A7F6F", medium: "#D9A400", high: "#C9560F", "very high": "#D21034" };
   // Streets by class (0 motorway, 1 national, 2 secondary, 3 local): drawn from saved OpenStreetMap data, no tiles
   const STREET_STYLE = [
-    { color: "#e9a23b", weight: 4 }, { color: "#f2cf79", weight: 3.5 }, { color: "#ffffff", weight: 3 }, { color: "#ffffff", weight: 1.6 },
+    { color: "#FFFFFF", weight: 4 }, { color: "#FFFFFF", weight: 3.5 }, { color: "#FFFFFF", weight: 3 }, { color: "#FFFFFF", weight: 1.6 },
   ];
   const PLACE_SIZE = ["1.05rem", ".95rem", ".8rem"];
   let map = null, car = null;
@@ -18,7 +18,7 @@ const MapView = (() => {
     map = L.map("map", { zoomControl: true, attributionControl: true, minZoom: 10, maxZoom: 17, preferCanvas: true });
     map.attributionControl.addAttribution("Streets © OpenStreetMap contributors");
     map.setView([36.37, 3.9], 12);
-    document.getElementById("map").style.background = "#e4e8e6";
+    document.getElementById("map").style.background = "#F3F0E8";
     try {
       const streets = await fetch("/static/streets.json").then((r) => r.json());
       drawStreets(streets);
@@ -93,10 +93,10 @@ const MapView = (() => {
 
     const roadLine = (pts, opts) => L.polyline(pts, { lineCap: "round", lineJoin: "round", interactive: false, ...opts }).addTo(layer);
     roadLine(legs.main.path, { color: "#fff", weight: 11, opacity: 0.95 });
-    roadLine(legs.main.path, { color: "#4f6068", weight: 6 });
+    roadLine(legs.main.path, { color: "#8A9189", weight: 6 });
     altLine = null;
     if (preset.alt) {
-      altLine = roadLine(legs.alt.path, { color: "#2f6fb3", weight: 4, opacity: 0.55, dashArray: "2 9" });
+      altLine = roadLine(legs.alt.path, { color: "#0F766E", weight: 4, opacity: 0.7, dashArray: "2 9" });
       const at = positionOf("main", preset.branch_m);
       L.marker(at, { icon: L.divIcon({ className: "", html: '<div class="flag split">Other route leaves here</div>', iconSize: [0, 0] }), interactive: false }).addTo(layer);
     }
@@ -123,7 +123,7 @@ const MapView = (() => {
   }
 
   function addZone(alert) {
-    const color = alert.level === "very high" ? "#c8231b" : "#ee8a2b";
+    const color = alert.level === "very high" ? "#D21034" : "#C9560F";
     const band = L.polyline(slice(alert.leg, alert.a, alert.b), { color, weight: 18, opacity: 0.28, lineCap: "butt", interactive: false }).addTo(layer);
     const text = PhoneUI.COPY[alert.type].title;
     const label = L.marker(positionOf(alert.leg, (alert.a + alert.b) / 2), {

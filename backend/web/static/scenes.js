@@ -6,8 +6,8 @@ const S_NEAR = 13, S_FAR = 7;  // pixels per metre in the road scenes: close up,
 let S = S_NEAR;               // the scale of the car being drawn
 const CAR_L = 4.5, CAR_W = 1.9;
 const IMPACT_S = 8;           // the impact is the 8th second of the 16 s recording
-const ALARM = "#d92b22", CLEAR = "#1f9d76";
-const FONT = "'Barlow Condensed', 'Barlow', system-ui, sans-serif";
+const ALARM = "#D21034", CLEAR = "#006233";
+const FONT = "'Geist', system-ui, sans-serif";
 
 // ---------------------------------------------------------------- motion
 
@@ -162,11 +162,11 @@ function drawBanner(ctx, car, now) {
   ctx.fillStyle = alarm ? ALARM : CLEAR;
   ctx.fillRect(0, 0, W, 92);
   ctx.fillStyle = "#fff";
-  ctx.font = `700 58px ${FONT}`;
+  ctx.font = `700 50px ${FONT}`;
   ctx.textBaseline = "middle";
   ctx.fillText(WORDS[r.level], 22, 47);
   ctx.textAlign = "right";
-  ctx.font = `500 36px ${FONT}`;
+  ctx.font = `500 30px ${FONT}`;
   ctx.fillText(`Crash chance ${(r.p_crash * 100).toFixed(1)}%`, W - 22, 47);
   ctx.textAlign = "left";
 }

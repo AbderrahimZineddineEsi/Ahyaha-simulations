@@ -1,54 +1,82 @@
-/* Shared by the operator screen, /dev and /dev/simulator. Fonts are vendored: the demo has to work with no internet. */
-@font-face { font-family: "Barlow"; font-weight: 400; font-display: swap; src: url(/static/vendor/fonts/barlow-latin-400-normal.woff2) format("woff2"); }
-@font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url(/static/vendor/fonts/barlow-latin-500-normal.woff2) format("woff2"); }
-@font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url(/static/vendor/fonts/barlow-latin-600-normal.woff2) format("woff2"); }
-@font-face { font-family: "Barlow"; font-weight: 700; font-display: swap; src: url(/static/vendor/fonts/barlow-latin-700-normal.woff2) format("woff2"); }
-@font-face { font-family: "Barlow Condensed"; font-weight: 500; font-display: swap; src: url(/static/vendor/fonts/barlow-condensed-latin-500-normal.woff2) format("woff2"); }
-@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(/static/vendor/fonts/barlow-condensed-latin-600-normal.woff2) format("woff2"); }
-@font-face { font-family: "Barlow Condensed"; font-weight: 700; font-display: swap; src: url(/static/vendor/fonts/barlow-condensed-latin-700-normal.woff2) format("woff2"); }
+/* Shared by every page. "Saharan Paper": the same tokens as the web app (src/styles/tokens.css on the mnwr branch), so keep the names and values in step.
+   Fonts are vendored: the demo has to work with no internet. */
+@font-face { font-family: "Geist"; font-weight: 400; font-display: swap; src: url(/static/vendor/fonts/geist-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 500; font-display: swap; src: url(/static/vendor/fonts/geist-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 600; font-display: swap; src: url(/static/vendor/fonts/geist-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 700; font-display: swap; src: url(/static/vendor/fonts/geist-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 400; font-display: swap; src: url(/static/vendor/fonts/geist-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 500; font-display: swap; src: url(/static/vendor/fonts/geist-mono-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 600; font-display: swap; src: url(/static/vendor/fonts/geist-mono-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 700; font-display: swap; src: url(/static/vendor/fonts/geist-mono-latin-700-normal.woff2) format("woff2"); }
 
 :root {
-  --tarmac: #24343d;
-  --tarmac-deep: #1a262d;
-  --tarmac-raised: #31444e;
-  --tarmac-soft: #3a4f5a;
-  --tarmac-line: #475d69;
-  --concrete: #e6eaea;
-  --ink-soft: #aebcc3;          /* secondary text on tarmac: 7:1 on --tarmac */
-  --line: #f5bc00;              /* lane yellow: the next thing to press, and the ambulance */
-  --alarm: #d92b22;
-  --alarm-soft: #ffb4ae;
-  --clear: #1f9d76;
-  --clear-soft: #8fe0c0;
-  --blue: #4b96dc;
-  --white: #ffffff;
-  --font: "Barlow", system-ui, sans-serif;
-  --font-head: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  /* surfaces */
+  --bg: #FAF8F3;
+  --surface: #FFFFFF;
+  --surface-2: #F3F0E8;
+  --border: #E6E1D5;
+  --border-strong: #D3CCBB;
+  /* ink */
+  --ink: #14201A;
+  --ink-2: #3B4740;
+  --muted: #5C675F;
+  --white: #FFFFFF;             /* text on a filled colour */
+  /* brand (flag green): the next thing to press, and progress. Never red for that */
+  --brand: #006233;
+  --brand-hover: #007A41;
+  --brand-press: #004D28;
+  --brand-subtle: #E6F1EA;
+  /* severity (M3). Red is only for critical */
+  --sev-low: #2A7F6F;
+  --sev-medium: #D9A400;        /* text on it: --ink */
+  --sev-high: #C9560F;
+  --sev-extreme: #D21034;       /* flag red */
+  --sev-extreme-subtle: #FBE5E9;
+  /* body regions (M4) */
+  --reg-unlikely: #C9C4B6;
+  --reg-check: #E0A100;
+  --reg-likely: #D21034;
+  /* unconfirmed people and pins */
+  --conf-suspected: #8A9189;
+  /* map */
+  --route-second: #0F766E;
+  /* radii */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
+  /* shadows */
+  --shadow-1: 0 1px 2px rgba(20, 32, 26, .06);
+  --shadow-2: 0 4px 16px rgba(20, 32, 26, .08);
+  /* motion */
+  --dur-fast: 150ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* fonts */
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
 }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: var(--font); background: var(--tarmac-deep); color: var(--white); font-size: 16px; }
-h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 600; }
-.num { font-family: var(--font-head); font-variant-numeric: tabular-nums; }
+body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--ink); font-size: 16px; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-weight: 600; letter-spacing: -.01em; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
-button, select { font: inherit; font-weight: 600; border: 0; border-radius: 6px; padding: 9px 14px; }
-button { cursor: pointer; background: var(--line); color: var(--tarmac-deep); transition: background-color .15s, transform .1s; }
-button:hover:not(:disabled) { background: #ffd23d; }
-button:active:not(:disabled) { transform: translateY(1px); }
-button:disabled { background: var(--tarmac-raised); color: #7f949e; cursor: default; }
-button.quiet { background: var(--tarmac-raised); color: var(--white); }
-button.quiet:hover:not(:disabled) { background: var(--tarmac-soft); }
-button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
-a { color: var(--white); font-weight: 600; text-decoration: none; }
-a:hover { text-decoration: underline; }
+button, select { font: inherit; font-weight: 600; border: 1px solid transparent; border-radius: var(--r-md); padding: 8px 14px; }
+button { cursor: pointer; background: var(--brand); color: var(--white); box-shadow: 0 2px 4px rgba(0, 98, 51, .18); transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+button:hover:not(:disabled) { background: var(--brand-hover); box-shadow: 0 4px 10px rgba(0, 98, 51, .28); }
+button:active:not(:disabled) { background: var(--brand-press); transform: scale(.985); }
+button:disabled { background: var(--surface-2); color: var(--muted); border-color: var(--border); box-shadow: none; opacity: .65; cursor: not-allowed; }
+button.quiet { background: var(--surface); color: var(--ink); border-color: var(--border-strong); box-shadow: var(--shadow-1); font-weight: 500; }
+button.quiet:hover:not(:disabled) { background: var(--surface-2); border-color: var(--ink-2); box-shadow: var(--shadow-1); }
+button.quiet:active:not(:disabled) { background: var(--brand-subtle); border-color: var(--brand); color: var(--brand-press); }
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+a { color: var(--brand); font-weight: 600; text-decoration: none; }
+a:hover { color: var(--brand-hover); text-decoration: underline; }
 
-.topbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 20px; background: var(--tarmac); border-bottom: 1px solid var(--tarmac-line); }
-.brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-head); font-size: 1.5rem; font-weight: 700; letter-spacing: .01em; }
-.brand i { width: 14px; height: 14px; border-radius: 3px; background: var(--line); box-shadow: 0 0 0 3px rgba(245, 188, 0, .25); }
-.brand span { font-family: var(--font); font-size: .95rem; font-weight: 500; color: var(--ink-soft); }
+.topbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 700; letter-spacing: -.02em; }
+.brand i { width: 14px; height: 14px; border-radius: 4px; background: var(--brand); box-shadow: 0 0 0 3px var(--brand-subtle); }
+.brand span { font-size: .95rem; font-weight: 500; letter-spacing: 0; color: var(--muted); }
 .topbar nav { display: flex; align-items: center; gap: 18px; }
-.link { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: .95rem; }
-.link::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--clear); }
-.link[data-up="false"] { color: var(--alarm-soft); font-weight: 600; }
-.link[data-up="false"]::before { background: var(--alarm); }
+.link { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .95rem; }
+.link::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--brand); }
+.link[data-up="false"] { color: var(--sev-extreme); font-weight: 600; }
+.link[data-up="false"]::before { background: var(--sev-extreme); }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

@@ -8,94 +8,98 @@
 <link rel="stylesheet" href="/static/theme.css">
 <style>
   body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-  .topbar .where { color: var(--ink-soft); font-family: var(--font); font-size: .95rem; font-weight: 500; margin-left: 6px; }
+  .topbar .where { color: var(--muted); font-family: var(--font-sans); font-size: .95rem; font-weight: 500; margin-left: 6px; }
   main { flex: 1; min-height: 0; display: grid; grid-template-columns: 350px minmax(0, 1fr) 410px; }
-  aside { min-height: 0; overflow-y: auto; background: var(--tarmac); }
-  aside.left { border-right: 1px solid var(--tarmac-line); }
-  aside.right { border-left: 1px solid var(--tarmac-line); }
-  h2 { margin: 0; padding: 16px 18px 8px; font-size: 1.2rem; color: var(--ink-soft); }
-  h2:not(:first-child) { border-top: 1px solid var(--tarmac-line); margin-top: 8px; }
+  aside { min-height: 0; overflow-y: auto; background: var(--bg); }
+  aside.left { border-right: 1px solid var(--border); }
+  aside.right { border-left: 1px solid var(--border); }
+  h2 { margin: 0; padding: 16px 18px 8px; font-size: 1.2rem; color: var(--muted); }
+  h2:not(:first-child) { border-top: 1px solid var(--border); margin-top: 8px; }
   section { padding-bottom: 6px; }
-  .empty { padding: 4px 18px 16px; line-height: 1.4; color: var(--ink-soft); }
-  .muted { color: var(--ink-soft); }
+  .empty { padding: 4px 18px 16px; line-height: 1.4; color: var(--muted); }
+  .muted { color: var(--muted); }
 
-  #map { position: relative; background: #19252c; }
-  .leaflet-container { font: 500 .95rem/1.4 var(--font); }
-  .legend { position: absolute; z-index: 800; left: 12px; bottom: 28px; background: rgba(26, 38, 45, .92); padding: 8px 12px; font-size: .9rem; line-height: 1.7; border-radius: 8px; }
+  #map { position: relative; background: var(--surface-2); }
+  .leaflet-container { font: 500 .95rem/1.4 var(--font-sans); }
+  .legend { position: absolute; z-index: 800; left: 12px; bottom: 28px; background: rgba(255, 255, 255, .94); border: 1px solid var(--border); box-shadow: var(--shadow-2); padding: 8px 12px; font-size: .9rem; line-height: 1.7; border-radius: var(--r-md); }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
-  .leaflet-control-attribution { background: rgba(26, 38, 45, .85) !important; color: var(--ink-soft) !important; }
-  .leaflet-control-attribution a { color: var(--white) !important; }
-  .pin { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--white); font: 700 .95rem var(--font); border: 3px solid var(--white); box-shadow: 0 1px 5px rgba(0, 0, 0, .6); }
-  .pin.amb { border-radius: 6px; background: var(--line); color: var(--tarmac-deep); }
-  .pin.amb[data-moving="true"] { box-shadow: 0 0 0 5px rgba(245, 188, 0, .4); }
-  .pin.station { border-radius: 6px; background: var(--tarmac-raised); width: 34px; }
-  .pin.user { background: var(--blue); }
-  .pin.victim { background: var(--alarm); }
-  .pin.helper { background: var(--clear); }
-  .pin.driver { background: var(--blue); outline: 3px solid var(--line); }
-  .pin.lost { background: #6b7c85; }
-  .pin.crash { width: 44px; height: 44px; background: var(--alarm); font-size: 1.5rem; animation: pulse 1.6s ease-out infinite; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(217, 43, 34, .75); } 100% { box-shadow: 0 0 0 28px rgba(217, 43, 34, 0); } }
+  .leaflet-control-attribution { background: rgba(255, 255, 255, .85) !important; color: var(--muted) !important; }
+  .leaflet-control-attribution a { color: var(--ink) !important; }
+  .pin { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--white); font: 700 .95rem var(--font-sans); border: 3px solid var(--white); box-shadow: 0 1px 5px rgba(20, 32, 26, .35); }
+  .pin.amb { border-radius: var(--r-sm); background: var(--surface); color: var(--brand); border-color: var(--brand); }
+  .pin.amb[data-moving="true"] { box-shadow: 0 0 0 5px rgba(0, 98, 51, .4); }
+  .pin.station { border-radius: var(--r-sm); background: var(--ink-2); width: 34px; }
+  .pin.user { background: var(--ink-2); }
+  .pin.victim { background: var(--sev-extreme); }
+  .pin.helper { background: var(--brand); }
+  .pin.driver { background: var(--ink-2); outline: 3px solid var(--brand); }
+  .pin.lost { background: var(--conf-suspected); }
+  .pin.crash { width: 44px; height: 44px; background: var(--sev-extreme); font-size: 1.5rem; animation: pulse 1.6s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(210, 16, 52, .75); } 100% { box-shadow: 0 0 0 28px rgba(210, 16, 52, 0); } }
 
   /* What the agent just did, over the map: the lines fade, they are not a log */
   #ticker { position: absolute; z-index: 850; right: 12px; bottom: 30px; width: min(460px, calc(100% - 290px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
-  .tick { background: rgba(26, 38, 45, .94); border-left: 4px solid var(--line); border-radius: 8px; padding: 8px 12px; line-height: 1.3; box-shadow: 0 4px 14px rgba(0, 0, 0, .4); animation: tick-in .25s ease-out; }
+  .tick { background: rgba(255, 255, 255, .96); border: 1px solid var(--border); border-left: 4px solid var(--brand); border-radius: var(--r-md); padding: 8px 12px; line-height: 1.3; box-shadow: 0 4px 14px rgba(20, 32, 26, .14); animation: tick-in .25s ease-out; }
   .tick.out { opacity: 0; transform: translateY(6px); transition: opacity .4s, transform .4s; }
   @keyframes tick-in { from { opacity: 0; transform: translateY(8px); } }
 
-  #popup { position: absolute; z-index: 900; top: 14px; left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 90px)); background: var(--tarmac); color: var(--white); border-top: 6px solid var(--line); border-radius: 10px; padding: 14px 18px 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .55); }
+  #popup { position: absolute; z-index: 900; top: 14px; left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 90px)); background: var(--surface); color: var(--ink); border-top: 6px solid var(--brand); border-radius: var(--r-lg); padding: 14px 18px 16px; box-shadow: 0 10px 30px rgba(20, 32, 26, .22); }
   #popup:empty { display: none; }
-  #popup[data-mood="alarm"] { border-top-color: var(--alarm); }
+  #popup[data-mood="alarm"] { border-top-color: var(--sev-extreme); }
   #popup h3 { margin: 0 0 4px; font-size: 1.5rem; }
-  #popup p { margin: 0 0 10px; line-height: 1.4; color: #d3dde2; }
-  .zone-label { background: none; border: 0; box-shadow: none; color: var(--ink-soft); font: 600 1rem var(--font); }
+  #popup p { margin: 0 0 10px; line-height: 1.4; color: var(--ink-2); }
+  .zone-label { background: none; border: 0; box-shadow: none; color: var(--muted); font: 600 1rem var(--font-sans); }
 
   .incident-head { padding: 14px 18px 16px; }
-  .incident-head[data-mood="watch"] { background: var(--line); color: var(--tarmac-deep); }
-  .incident-head[data-mood="alarm"] { background: var(--alarm); }
-  .incident-head[data-mood="move"] { background: var(--tarmac-raised); border-bottom: 4px solid var(--line); }
-  .incident-head[data-mood="clear"] { background: var(--clear); }
+  .incident-head[data-mood="watch"] { background: var(--sev-medium); color: var(--ink); }
+  .incident-head[data-mood="alarm"] { background: var(--sev-extreme); color: var(--white); }
+  .incident-head[data-mood="move"] { background: var(--brand-subtle); border-bottom: 4px solid var(--brand); }
+  .incident-head[data-mood="clear"] { background: var(--brand); color: var(--white); }
   .incident-head small { display: block; opacity: .9; font-size: .95rem; }
-  .incident-head strong { display: block; margin-top: 2px; font-family: var(--font-head); font-size: 1.9rem; font-weight: 600; line-height: 1.1; }
+  .incident-head strong { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 1.9rem; font-weight: 600; line-height: 1.1; }
   .block { padding: 4px 18px 12px; }
   .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 3px 0; }
-  .level { font-family: var(--font-head); font-size: 2.2rem; font-weight: 600; text-transform: capitalize; line-height: 1.1; }
-  .level[data-level="extreme"], .level[data-level="high"] { color: var(--alarm-soft); }
+  .level { font-family: var(--font-sans); font-size: 2.2rem; font-weight: 600; text-transform: capitalize; line-height: 1.1; }
+  .level[data-level="low"] { color: var(--sev-low); }
+  .level[data-level="high"] { color: var(--sev-high); }
+  .level[data-level="extreme"] { color: var(--sev-extreme); }
   .regions { margin: 6px 0 0; padding: 0; list-style: none; }
   .regions li { display: grid; grid-template-columns: 5.5em 1fr 4.2em; align-items: center; gap: 8px; padding: 3px 0; font-size: .98rem; text-transform: capitalize; }
-  .bar { height: 10px; background: var(--tarmac-raised); border-radius: 5px; overflow: hidden; }
-  .bar i { display: block; height: 100%; background: #8fa0a8; }
-  .regions li[data-state="likely"] .bar i { background: var(--alarm); }
-  .regions li[data-state="check"] .bar i { background: var(--line); }
-  .regions li[data-state="unlikely"] { color: #7f949e; }
+  .bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--reg-unlikely); }
+  .regions li[data-state="likely"] .bar i { background: var(--reg-likely); }
+  .regions li[data-state="check"] .bar i { background: var(--reg-check); }
+  .regions li[data-state="unlikely"] { color: var(--muted); }
   .state { text-align: right; font-size: .9rem; text-transform: none; }
   .person { line-height: 1.45; }
   .person b { font-size: 1.15rem; }
 
   .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; margin-top: 8px; }
   .actions > * { flex: 1 1 auto; }
-  select { background: var(--white); color: var(--tarmac-deep); text-transform: capitalize; }
-  .done { padding: 8px 0; color: var(--clear-soft); font-weight: 600; }
+  select { background: var(--surface); color: var(--ink); border-color: var(--border-strong); text-transform: capitalize; }
+  .done { padding: 8px 0; color: var(--brand); font-weight: 600; }
 
-  .card { background: var(--tarmac-raised); padding: 11px 13px; margin-top: 8px; line-height: 1.4; border-radius: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-1); padding: 11px 13px; margin-top: 8px; line-height: 1.4; border-radius: var(--r-lg); }
   .card .row b { font-size: 1.1rem; }
-  .card .eta { font-family: var(--font-head); font-size: 2.3rem; font-weight: 600; line-height: 1.1; color: var(--line); font-variant-numeric: tabular-nums; }
-  .card .meter { height: 6px; background: var(--tarmac-deep); border-radius: 3px; margin-top: 6px; overflow: hidden; }
-  .card .meter i { display: block; height: 100%; background: var(--line); }
-  .card[data-best="true"] { box-shadow: inset 4px 0 0 var(--line); }
-  .tag { font-size: .85rem; padding: 2px 9px; border-radius: 10px; background: var(--tarmac-deep); color: var(--ink-soft); }
-  .tag.ok { background: var(--clear); color: var(--white); }
-  .tag.best { background: var(--line); color: var(--tarmac-deep); font-weight: 600; }
-  .calling { color: var(--line); font-weight: 600; }
-  .hint { color: var(--ink-soft); font-size: .92rem; margin: 6px 0 0; }
+  .card .row .quick { font-size: .92rem; white-space: nowrap; }
+  .card .row .quick b { font-size: 1rem; }
+  .card .eta { font-family: var(--font-sans); font-size: 2.3rem; font-weight: 600; line-height: 1.1; color: var(--brand); font-variant-numeric: tabular-nums; }
+  .card .meter { height: 6px; background: var(--surface-2); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .card .meter i { display: block; height: 100%; background: var(--brand); }
+  .card[data-best="true"] { box-shadow: inset 4px 0 0 var(--brand); }
+  .tag { font-size: .85rem; padding: 2px 9px; border-radius: var(--r-md); background: var(--surface-2); color: var(--muted); }
+  .tag.ok { background: var(--brand); color: var(--white); }
+  .tag.best { background: var(--brand); color: var(--white); font-weight: 600; }
+  .calling { color: var(--brand); font-weight: 600; }
+  .hint { color: var(--muted); font-size: .92rem; margin: 6px 0 0; }
 
   .incidents { list-style: none; margin: 0; padding: 0 0 8px; }
-  .incidents button { display: block; width: 100%; text-align: left; background: transparent; color: var(--white); border-radius: 0; padding: 9px 18px; font-weight: 400; line-height: 1.3; border-top: 1px solid var(--tarmac-line); }
-  .incidents button:hover { background: var(--tarmac-raised); }
-  .incidents button[aria-current="true"] { background: var(--tarmac-raised); box-shadow: inset 5px 0 0 var(--line); }
+  .incidents button { display: block; width: 100%; text-align: left; background: transparent; color: var(--ink); border: 0; border-radius: 0; box-shadow: none; padding: 9px 18px; font-weight: 400; line-height: 1.3; border-top: 1px solid var(--border); }
+  .incidents button:hover:not(:disabled) { background: var(--surface-2); box-shadow: none; }
+  .incidents button[aria-current="true"], .incidents button[aria-current="true"]:hover:not(:disabled) { background: var(--brand-subtle); box-shadow: inset 5px 0 0 var(--brand); }
   .incidents button b { display: block; font-weight: 600; }
-  .incidents button span { color: var(--ink-soft); font-size: .92rem; }
-  .incidents button[data-mood="alarm"] b { color: var(--alarm-soft); }
+  .incidents button span { color: var(--muted); font-size: .92rem; }
+  .incidents button[data-mood="alarm"] b { color: var(--sev-extreme); }
 
   @media (max-width: 1000px) {
     body { height: auto; overflow: auto; }
@@ -103,14 +107,14 @@
     #map { height: 60vh; }
     aside { overflow: visible; }
   }
-  .login { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(26, 38, 45, .96); }
+  .login { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(250, 248, 243, .96); }
   .login[hidden] { display: none; }
-  .login form { background: var(--tarmac); padding: 24px 28px 26px; width: min(380px, calc(100% - 32px)); border-top: 6px solid var(--line); border-radius: 12px; }
+  .login form { background: var(--surface); box-shadow: var(--shadow-2); padding: 24px 28px 26px; width: min(380px, calc(100% - 32px)); border-top: 6px solid var(--brand); border-radius: var(--r-lg); }
   .login h1 { margin: 0 0 12px; font-size: 1.8rem; }
   .login label { display: block; margin-top: 10px; font-weight: 600; }
-  .login input { display: block; width: 100%; margin-top: 4px; padding: 10px; font: inherit; border: 2px solid var(--tarmac-line); border-radius: 6px; background: var(--tarmac-deep); color: var(--white); }
+  .login input { display: block; width: 100%; margin-top: 4px; padding: 10px; font: inherit; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface); color: var(--ink); }
   .login button { margin-top: 16px; width: 100%; }
-  .login .error { color: var(--alarm-soft); font-weight: 600; margin-top: 10px; min-height: 1.2em; }
+  .login .error { color: var(--sev-extreme); font-weight: 600; margin-top: 10px; min-height: 1.2em; }
   header button.quiet { padding: 5px 12px; }
   @media (prefers-reduced-motion: reduce) { .pin.crash { animation: none; } }
 </style>
@@ -133,10 +137,10 @@
   </aside>
   <div id="map" role="application" aria-label="Map">
     <div class="legend">
-      <div><i style="background:var(--alarm)"></i>Crash, person in the accident</div>
-      <div><i style="background:var(--blue)"></i>People nearby</div>
-      <div><i style="background:var(--clear)"></i>Helpers</div>
-      <div><i style="background:var(--line);border-radius:3px"></i>Ambulances</div>
+      <div><i style="background:var(--sev-extreme)"></i>Crash, person in the accident</div>
+      <div><i style="background:var(--ink-2)"></i>People nearby</div>
+      <div><i style="background:var(--brand)"></i>Helpers</div>
+      <div><i style="background:var(--surface);border:2px solid var(--brand);border-radius:3px"></i>Ambulances</div>
     </div>
     <div id="popup" role="alert"></div>
     <div id="ticker" aria-live="polite"></div>
@@ -228,8 +232,8 @@ async function showRegion(name) {
     try { roads = await (await fetch(`/static/roads_${name}.json`)).json(); } catch (e) { /* no street file */ }
     const layer = L.layerGroup();
     const draw = style => roads.forEach(r => L.polyline(r.p, { ...style(r), interactive: false, lineCap: "round", lineJoin: "round" }).addTo(layer));
-    draw(r => ({ color: "#2a3b45", weight: (WIDTH[r.c] ?? 2) + 2 }));   // outlines first, so crossings read as junctions
-    draw(r => ({ color: "#4d6370", weight: WIDTH[r.c] ?? 2 }));
+    draw(r => ({ color: "#D3CCBB", weight: (WIDTH[r.c] ?? 2) + 2 }));   // outlines first, so crossings read as junctions
+    draw(r => ({ color: "#FFFFFF", weight: WIDTH[r.c] ?? 2 }));
     streets[name] = layer;
   }
   if (region === name) streets[name].addTo(map);
@@ -265,7 +269,7 @@ function renderMap() {
   }
   if (!inc) return;
   if (dz && !lines.zone) {
-    lines.zone = L.circle(dz.zone.center, { radius: dz.zone.radius_m, color: "#aebcc3", weight: 2, dashArray: "5 7", fillColor: "#aebcc3", fillOpacity: 0.12, interactive: false })
+    lines.zone = L.circle(dz.zone.center, { radius: dz.zone.radius_m, color: "#8A9189", weight: 2, dashArray: "5 7", fillColor: "#8A9189", fillOpacity: 0.12, interactive: false })
       .bindTooltip("No network", { permanent: true, direction: "center", className: "zone-label" }).addTo(map);
   }
   if (inc.location && (!dz || dz.found)) setMarker("crash", [inc.location.lat, inc.location.lon], pin("crash", "!"), "Crash"); else dropMarker("crash");
@@ -277,13 +281,13 @@ function renderMap() {
     const where = lost ? dz.last_seen : u.pos;
     setMarker("u" + u.id, where, pin(cls, lost ? "?" : esc(u.name[0])), lost ? "Last known position" : u.name);
   }
-  if (inc.dispatch?.route) setLine("amb", inc.dispatch.route, { color: "#f5bc00", weight: 5, dashArray: "2 10", lineCap: "round" });
+  if (inc.dispatch?.route) setLine("amb", inc.dispatch.route, { color: "#006233", weight: 5, dashArray: "2 10", lineCap: "round" });
   if (inc.help_radius_km && !lines["r" + inc.help_radius_km] && inc.location) {
-    lines["r" + inc.help_radius_km] = L.circle([inc.location.lat, inc.location.lon], { radius: inc.help_radius_km * 1000, color: "#2dc795", weight: 2, dashArray: "6 8", fillOpacity: 0.05, interactive: false }).addTo(map);
+    lines["r" + inc.help_radius_km] = L.circle([inc.location.lat, inc.location.lon], { radius: inc.help_radius_km * 1000, color: "#0F766E", weight: 2, dashArray: "6 8", fillOpacity: 0.05, interactive: false }).addTo(map);
   }
   for (const u of snap.users) {
     if (u.kind === "helper" && u.route && ["accepted", "confirmed", "on_scene"].includes(inc.helpers[u.id])) {
-      setLine("h" + u.id, u.route, { color: "#2dc795", weight: 4, dashArray: "2 9", lineCap: "round" });
+      setLine("h" + u.id, u.route, { color: "#0F766E", weight: 4, dashArray: "2 9", lineCap: "round" });
     }
   }
 }
@@ -334,7 +338,7 @@ function ambulanceHtml(a, inc, best) {
     body = `<div class="eta" data-eta>ETA ${minutes(d.eta_remaining_s)}</div><div class="meter"><i data-meter style="width:${d.progress * 100}%"></i></div>`;
   } else if (a.state === "available") {
     const can = canDispatch(inc);
-    body = `<div class="row"><span>${a.eta_s ? `ETA to the crash <b>${minutes(a.eta_s)}</b>` : ""}</span><button type="button" data-dispatch="${a.id}" ${can ? "" : "disabled"}>Dispatch</button></div>`;
+    body = `<div class="row"><span class="quick">${a.eta_s ? `ETA to the crash <b>${minutes(a.eta_s)}</b>` : ""}</span><button type="button" data-dispatch="${a.id}" ${can ? "" : "disabled"}>Dispatch</button></div>`;
   }
   if (best) status = `<span class="tag best">Fastest</span> ${status}`;
   return `<div class="card" data-best="${!!best}"><div class="row"><b>${esc(a.name)}</b><span>${status}</span></div>${note}${body}</div>`;
