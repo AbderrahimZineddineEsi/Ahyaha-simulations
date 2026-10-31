@@ -47,7 +47,7 @@ AMBULANCES = [
     {"id": "amb-2", "name": "Ambulance 2", "state": "available", "prep_s": 60, "parked": [-0.0028, -0.0012], "note": "Crew needs 1 min to get ready"},
     {"id": "amb-3", "name": "Ambulance 3", "state": "busy", "prep_s": 0, "parked": [0.0, 0.0009], "note": "On another mission"},
 ]
-PARKED_SPREAD = {"town": 1, "remote": 4}  # the remote map is more zoomed out: parked ambulances need more room to show apart
+PARKED_SPREAD = {"town": 2, "remote": 4}  # the remote map is more zoomed out: parked ambulances need more room to show apart
 
 # Made-up stations, and the units on patrol. Where a unit is at each place, and its road to the crash, is in demo_routes.json
 POLICE_STATIONS = [

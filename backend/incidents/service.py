@@ -78,10 +78,13 @@ async def alert_witnesses(s, inc):
 
 
 async def withdraw_witnesses(s, inc, except_id=None):
-    """The crash has an answer (the victim, a witness, an SOS or the agent), so the other people nearby are no longer asked."""
-    n = await notifications.expire_open(s, inc.id, ("witness",), state="withdrawn", except_id=except_id)
-    if n:
-        say(s, inc, f"Alert withdrawn from {n} {'person' if n == 1 else 'people'} nearby: it has an answer.", kind="notification")
+    """The crash has an answer (the victim, a witness, an SOS or the agent), so the other people nearby are no longer asked. They are warned instead: the crash is still there, and a second one is what we want to avoid."""
+    notes = await notifications.expire_open(s, inc.id, ("witness",), state="withdrawn", except_id=except_id)
+    for note in notes:
+        await notify(s, note.user_id, "caution", "Accident nearby, be careful", "Slow down and watch for people on the road.", incident_id=inc.id)
+    if notes:
+        n = len(notes)
+        say(s, inc, f"Alert withdrawn from {n} {'person' if n == 1 else 'people'} nearby: it has an answer. They were told to be careful.", kind="notification")
 
 
 async def sos_card(s, inc):

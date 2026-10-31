@@ -103,7 +103,7 @@
   .lock span { font-size: .85em; color: var(--muted); }
 
   .note { border-radius: var(--r-lg); padding: 9px 11px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-left: 5px solid var(--border-strong); box-shadow: var(--shadow-1); transform-origin: top; }
-  .note[data-kind="alert"] { border-left-color: var(--sev-medium); }
+  .note[data-kind="alert"], .note[data-kind="caution"] { border-left-color: var(--sev-medium); }
   .note[data-kind="witness"] { border-left-color: var(--ink-2); }
   .note[data-kind="helper"] { border-left-color: var(--brand); }
   .note[data-kind="sos"] { border-left-color: var(--sev-extreme); }

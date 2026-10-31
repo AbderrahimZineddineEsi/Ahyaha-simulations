@@ -21,20 +21,35 @@
 
   #map { position: relative; background: var(--surface-2); }
   .leaflet-container { font: 500 .95rem/1.4 var(--font-sans); }
-  .legend { position: absolute; z-index: 800; left: 12px; bottom: 28px; background: rgba(255, 255, 255, .94); border: 1px solid var(--border); box-shadow: var(--shadow-2); padding: 8px 12px; font-size: .9rem; line-height: 1.7; border-radius: var(--r-md); }
-  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
+  .legend { position: absolute; z-index: 800; left: 12px; bottom: 28px; background: rgba(255, 255, 255, .94); border: 1px solid var(--border); box-shadow: var(--shadow-2); padding: 8px 12px; font-size: .85rem; line-height: 1.2; border-radius: var(--r-md); display: grid; gap: 3px; }
+  .legend div.row-key { display: flex; align-items: center; gap: 8px; }
+  .legend .pin { width: 21px; height: 21px; border-width: 1.5px; box-shadow: none; flex: none; font-size: .7rem; }
+  .legend .pin svg { width: 13px; height: 13px; }
+  .legend .pin.pc svg { width: 100%; height: 100%; }
+  .legend .pin .badge { display: none; }
   .leaflet-control-attribution { background: rgba(255, 255, 255, .85) !important; color: var(--muted) !important; }
   .leaflet-control-attribution a { color: var(--ink) !important; }
   .pin { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--white); font: 700 .95rem var(--font-sans); border: 3px solid var(--white); box-shadow: 0 1px 5px rgba(20, 32, 26, .35); }
+  .pin { position: relative; }
+  .pin svg { width: 19px; height: 19px; display: block; fill: currentColor; }
+  .pin .badge { position: absolute; right: -8px; bottom: -8px; min-width: 16px; height: 16px; padding: 0 3px; display: grid; place-items: center; border-radius: 8px; border: 1.5px solid var(--white); background: var(--ink); color: var(--white); font: 700 .62rem/1 var(--font-sans); white-space: nowrap; }
   .pin.amb { border-radius: var(--r-sm); background: var(--surface); color: var(--brand); border-color: var(--brand); }
+  .pin.amb .badge { background: var(--brand); }
   .pin.amb[data-moving="true"] { box-shadow: 0 0 0 5px rgba(0, 98, 51, .4); }
-  .pin.station { border-radius: var(--r-sm); background: var(--ink-2); width: 34px; }
+  .pin.station { border-radius: var(--r-sm); }
+  .pin.station.police { background: var(--police); }
+  .pin.station.gendarmerie { background: var(--gendarmerie); }
+  .pin.pc { border-radius: var(--r-sm); background: var(--pc-orange); overflow: hidden; }
+  .pin.pc svg { width: 100%; height: 100%; fill: var(--pc-blue); }
   .pin.hospital { border-radius: var(--r-sm); background: var(--brand); }
-  .pin.unit { border-radius: var(--r-sm); background: var(--surface); color: var(--ink); border-color: var(--ink); font-size: .8rem; width: 34px; }
+  .pin.unit { border-radius: var(--r-sm); }
+  .pin.unit.police { background: var(--police); }
+  .pin.unit.gendarmerie { background: var(--gendarmerie); }
   .pin.unit[data-moving="true"] { box-shadow: 0 0 0 5px rgba(20, 32, 26, .2); }
   .pin.user { background: var(--ink-2); }
   .pin.victim { background: var(--sev-extreme); }
   .pin.helper { background: var(--brand); }
+  .pin.helper .badge { background: var(--white); border-color: var(--brand); color: var(--brand); font-size: .75rem; }
   .pin.driver { background: var(--ink-2); outline: 3px solid var(--brand); }
   .pin.lost { background: var(--conf-suspected); }
   .pin.crash { width: 44px; height: 44px; background: var(--sev-extreme); font-size: 1.5rem; animation: pulse 1.6s ease-out infinite; }
@@ -139,15 +154,7 @@
     <div id="fleet"></div>
   </aside>
   <div id="map" role="application" aria-label="Map">
-    <div class="legend">
-      <div><i style="background:var(--sev-extreme)"></i>Crash, person in the accident</div>
-      <div><i style="background:var(--ink-2)"></i>People nearby</div>
-      <div><i style="background:var(--brand)"></i>Helpers</div>
-      <div><i style="background:var(--surface);border:2px solid var(--brand);border-radius:3px"></i>Ambulances</div>
-      <div><i style="background:var(--surface);border:2px solid var(--ink);border-radius:3px"></i>Police, Gendarmerie</div>
-      <div><i style="background:var(--ink-2);border-radius:3px"></i>Stations</div>
-      <div><i style="background:var(--brand);border-radius:3px"></i>Hospitals</div>
-    </div>
+    <div class="legend" id="legend"></div>
     <div id="popup" role="alert"></div>
     <div id="ticker" aria-live="polite"></div>
   </div>
@@ -210,12 +217,31 @@ const WIDTH = { motorway: 7, trunk: 7, primary: 6, secondary: 5, tertiary: 4, un
 const NEARBY_M = 8000;
 const markers = {}, lines = {};
 
-function pin(cls, text, extra = "") {
-  return L.divIcon({ className: "", html: `<div class="pin ${cls}" ${extra}>${text}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+// Drawn here, not downloaded: the map has to work with no internet
+const ICONS = {
+  car: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 6c-.2-.6-.8-1-1.4-1h-11c-.7 0-1.2.4-1.4 1L3 12v8c0 .6.4 1 1 1h1c.6 0 1-.4 1-1v-1h12v1c0 .6.4 1 1 1h1c.6 0 1-.4 1-1v-8l-2.1-6zM6.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM5 11l1.5-4.5h11L19 11H5z"/></svg>`,
+  patrol: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="0.5" width="7" height="3.5" rx="1"/><path d="M18.9 6c-.2-.6-.8-1-1.4-1h-11c-.7 0-1.2.4-1.4 1L3 12v8c0 .6.4 1 1 1h1c.6 0 1-.4 1-1v-1h12v1c0 .6.4 1 1 1h1c.6 0 1-.4 1-1v-8l-2.1-6zM6.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM5 11l1.5-4.5h11L19 11H5z"/></svg>`,
+  ambulance: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M1 5.5A1.5 1.5 0 0 1 2.5 4H14a1 1 0 0 1 1 1v2h3.200a1.5 1.5 0 0 1 1.2.6L23 12.400V17a1 1 0 0 1-1 1h-1.200a2.8 2.8 0 0 1-5.6 0H9.800a2.8 2.8 0 0 1-5.6 0H2a1 1 0 0 1-1-1V5.500zM6.5 7v2.500H4v2.500h2.500v2.500H9V12h2.500V9.500H9V7H6.500zM15 9v3h5.500l-2.3-3H15z"/></svg>`,
+  walker: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3z"/></svg>`,
+  shield: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1 3 4.500V11c0 5.6 3.8 10.6 9 12 5.2-1.4 9-6.4 9-12V4.500L12 1z"/></svg>`,
+  emblem: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 22.5 21.500h-21z"/></svg>`,
+};
+
+function pinHtml(cls, body, extra = "", badge = "") {
+  return `<div class="pin ${cls}" ${extra}>${body}${badge ? `<b class="badge">${badge}</b>` : ""}</div>`;
 }
-function setMarker(key, position, icon, title) {
+function pin(cls, body, extra, badge) {
+  return L.divIcon({ className: "", html: pinHtml(cls, body, extra, badge), iconSize: [30, 30], iconAnchor: [15, 15] });
+}
+document.getElementById("legend").innerHTML = [
+  ["victim", ICONS.car, "Car in the crash"], ["user", ICONS.car, "Other cars nearby"], ["user", ICONS.walker, "People on foot"], ["helper", ICONS.car, "Helpers"],
+  ["amb", ICONS.ambulance, "Ambulances"], ["unit police", ICONS.patrol, "Police"], ["unit gendarmerie", ICONS.patrol, "Gendarmerie"],
+  ["pc", ICONS.emblem, "Protection Civile"], ["station police", ICONS.shield, "Police station"], ["station gendarmerie", ICONS.shield, "Gendarmerie brigade"], ["hospital", "H", "Hospitals"],
+].map(([cls, body, label]) => `<div class="row-key">${pinHtml(cls, body)}${label}</div>`).join("");
+const SCENE = -2000, BUILDING = -1000;   // whoever can move stays on top, and the crash's big disc must not hide a hospital next to it
+function setMarker(key, position, icon, title, zIndexOffset = 0) {
   if (markers[key]) { markers[key].setLatLng(position).setIcon(icon); return; }
-  markers[key] = L.marker(position, { icon, title, keyboard: false }).addTo(map);
+  markers[key] = L.marker(position, { icon, title, keyboard: false, zIndexOffset }).addTo(map);
 }
 function dropMarker(key) { if (markers[key]) { map.removeLayer(markers[key]); delete markers[key]; } }
 function setLine(key, points, style) { if (!lines[key]) lines[key] = L.polyline(points, style).addTo(map); }
@@ -274,29 +300,30 @@ function fitToIncident() {
 
 function renderMap() {
   const inc = snap?.incident, dz = snap?.dead_zone;
-  for (const c of centres) setMarker("station" + c.id, [c.lat, c.lon], pin("station", "PC"), c.name);
-  for (const p of stations) setMarker("police" + p.id, [p.lat, p.lon], pin("station", p.force === "police" ? "PN" : "GN"), p.name);
-  for (const h of hospitals) setMarker("hospital" + h.id, [h.lat, h.lon], pin("hospital", "H"), h.name);
+  for (const c of centres) setMarker("station" + c.id, [c.lat, c.lon], pin("pc", ICONS.emblem), c.name, BUILDING);
+  for (const p of stations) setMarker("police" + p.id, [p.lat, p.lon], pin(`station ${p.force}`, ICONS.shield), p.name, BUILDING);
+  for (const h of hospitals) setMarker("hospital" + h.id, [h.lat, h.lon], pin("hospital", "H"), h.name, BUILDING);
   for (const u of units) {
-    if (u.location) setMarker(u.id, [u.location.lat, u.location.lon], pin("unit", u.force[0].toUpperCase() + u.id.slice(-1), `data-moving="${u.state === "en_route"}"`), u.name);
+    if (u.location) setMarker(u.id, [u.location.lat, u.location.lon], pin(`unit ${u.force}`, ICONS.patrol, `data-moving="${u.state === "en_route"}"`, u.force[0].toUpperCase() + u.id.slice(-1)), u.name);
   }
   for (const a of ambulances) {
     if (a.state === "busy" || !a.pos) { dropMarker(a.id); continue; }
-    setMarker(a.id, a.pos, pin("amb", a.id.slice(-1), `data-moving="${["dispatched", "transport"].includes(a.state)}"`), a.name);
+    setMarker(a.id, a.pos, pin("amb", ICONS.ambulance, `data-moving="${["dispatched", "transport"].includes(a.state)}"`, a.id.slice(-1)), a.name);
   }
   if (!inc) return;
   if (dz && !lines.zone) {
     lines.zone = L.circle(dz.zone.center, { radius: dz.zone.radius_m, color: "#8A9189", weight: 2, dashArray: "5 7", fillColor: "#8A9189", fillOpacity: 0.12, interactive: false })
       .bindTooltip("No network", { permanent: true, direction: "center", className: "zone-label" }).addTo(map);
   }
-  if (inc.location && (!dz || dz.found)) setMarker("crash", [inc.location.lat, inc.location.lon], pin("crash", "!"), "Crash"); else dropMarker("crash");
+  if (inc.location && (!dz || dz.found)) setMarker("crash", [inc.location.lat, inc.location.lon], pin("crash", "!"), "Crash", SCENE); else dropMarker("crash");
   for (const u of snap.users) {
     if (u.kind === "victim" && dz?.found) { dropMarker("u" + u.id); continue; }
     if (!u.pos) continue;
     const lost = u.kind === "victim" && dz?.last_seen;
-    const cls = u.kind === "victim" ? (lost ? "lost" : dz ? "driver" : "victim") : u.kind === "helper" ? "helper" : "user";
+    const cls = u.kind === "victim" ? (lost ? "lost" : dz ? "driver" : "victim") : u.kind === "helper" || u.helper ? "helper" : "user";
+    const body = lost ? "?" : cls === "user" && !u.driving ? ICONS.walker : ICONS.car;
     const where = lost ? dz.last_seen : u.pos;
-    setMarker("u" + u.id, where, pin(cls, lost ? "?" : esc(u.name[0])), lost ? "Last known position" : u.name);
+    setMarker("u" + u.id, where, pin(cls, body, "", cls === "helper" ? "+" : ""), lost ? "Last known position" : u.name);
   }
   const toHospital = ["transport", "delivered"].includes(inc.dispatch?.state);
   if (toHospital && !lines.hospital) {      // the road to the crash is done: show the one to the hospital, which can be far off the map
@@ -594,7 +621,7 @@ async function refresh() {
     await select(selected);
   } else {
     detail = snap = null; selected = shown = null; sig = ""; eventCount = 0;
-    ambulances = await get("/ambulances");
+    ambulances = (await get("/ambulances")).map(a => ({ ...a, pos: a.location && [a.location.lat, a.location.lon] }));
     renderList(); renderTicker(null, true); renderPanel(null); dropAll(); renderMap();
   }
 }

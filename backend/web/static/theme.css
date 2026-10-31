@@ -38,8 +38,12 @@
   --reg-likely: #D21034;
   /* unconfirmed people and pins */
   --conf-suspected: #8A9189;
-  /* map */
+  /* map: who is who has to read at a glance, so these go beyond the web app's palette */
   --route-second: #0F766E;
+  --police: #1F3A6E;
+  --gendarmerie: #5B6B1F;
+  --pc-orange: #F58220;         /* the international civil-defence emblem: a blue triangle on orange */
+  --pc-blue: #0054A6;
   /* radii */
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
   /* shadows */

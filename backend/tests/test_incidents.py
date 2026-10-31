@@ -80,6 +80,8 @@ async def test_a_witness_confirming_raises_confidence_and_withdraws_the_others(m
     assert (await notes(yacine, "witness"))[0].state == "answered"
     other = (await notes(lina, "witness"))[0]
     assert other.state == "withdrawn"
+    assert [n.title for n in await notes(lina, "caution")] == ["Accident nearby, be careful"]
+    assert await notes(yacine, "caution") == []        # they answered: they already know
     assert (await lina.post(f"/notifications/{other.id}/respond", {"action": "deny"})).status_code == 409
     assert (await yacine.post(f"/notifications/{witness.id}/respond", {"action": "deny"})).status_code == 409
 

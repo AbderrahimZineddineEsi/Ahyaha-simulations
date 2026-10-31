@@ -44,13 +44,14 @@ A crash from a blackbox whose owner is known opens an incident for that person, 
  "state": "open", "answer": null, "remaining_s": 14.2, "incident_id": 3, "data": {}, "sent_at": "2026-10-30T12:00:00.000Z"}
 ```
 
-`state` is `open` (waiting for an answer), `answered`, `expired` (nobody answered by the deadline), `withdrawn` (someone else answered first, or the agent confirmed: remove it from the screen) or `delivered` (no answer needed). `remaining_s` counts down to the deadline, `null` if there is none.
+`state` is `open` (waiting for an answer), `answered`, `expired` (nobody answered by the deadline), `withdrawn` (someone else answered first, or the agent confirmed: remove it from the screen; a `caution` notification telling them to be careful follows) or `delivered` (no answer needed). `remaining_s` counts down to the deadline, `null` if there is none.
 
 | `kind` | Sent to | Actions | Deadline |
 |---|---|---|---|
 | `check` | the person in the crash, and the driver of any other car reporting the same crash | `ok`, `help` | 30 s (15 s in the demo). No answer means "user not responding". |
 | `sos` | the same person, when nobody is near | `silent`, `voice` | none |
 | `witness` | citizens within 2.5 km | `confirm`, `deny` | none |
+| `caution` | the people whose `witness` prompt was withdrawn: be careful, there is an accident nearby | none | none |
 | `helper` | helpers the agent calls | `accept`, `decline` | none |
 | `alert` | drivers within 300 m of an ambulance | none | none |
 | `info` | a helper the agent confirmed (first-aid card) | none | none |
