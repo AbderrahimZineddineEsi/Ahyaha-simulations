@@ -29,6 +29,9 @@
   .pin.amb { border-radius: var(--r-sm); background: var(--surface); color: var(--brand); border-color: var(--brand); }
   .pin.amb[data-moving="true"] { box-shadow: 0 0 0 5px rgba(0, 98, 51, .4); }
   .pin.station { border-radius: var(--r-sm); background: var(--ink-2); width: 34px; }
+  .pin.hospital { border-radius: var(--r-sm); background: var(--brand); }
+  .pin.unit { border-radius: var(--r-sm); background: var(--surface); color: var(--ink); border-color: var(--ink); font-size: .8rem; width: 34px; }
+  .pin.unit[data-moving="true"] { box-shadow: 0 0 0 5px rgba(20, 32, 26, .2); }
   .pin.user { background: var(--ink-2); }
   .pin.victim { background: var(--sev-extreme); }
   .pin.helper { background: var(--brand); }
@@ -141,6 +144,9 @@
       <div><i style="background:var(--ink-2)"></i>People nearby</div>
       <div><i style="background:var(--brand)"></i>Helpers</div>
       <div><i style="background:var(--surface);border:2px solid var(--brand);border-radius:3px"></i>Ambulances</div>
+      <div><i style="background:var(--surface);border:2px solid var(--ink);border-radius:3px"></i>Police, Gendarmerie</div>
+      <div><i style="background:var(--ink-2);border-radius:3px"></i>Stations</div>
+      <div><i style="background:var(--brand);border-radius:3px"></i>Hospitals</div>
     </div>
     <div id="popup" role="alert"></div>
     <div id="ticker" aria-live="polite"></div>
@@ -165,7 +171,7 @@
 const API = "/api/v1";
 const LEVELS = ["low", "medium", "high", "extreme"];
 const MOOD = { analyzing: "watch", detected: "alarm", agent_confirmed: "alarm", dispatched: "move", on_scene: "clear", false_alarm: "clear",
-               dead_zone_watch: "watch", in_zone: "move", turned_back: "clear", returned: "clear", closed: "clear", overdue: "alarm" };
+               transporting: "move", at_hospital: "clear", dead_zone_watch: "watch", in_zone: "move", turned_back: "clear", returned: "clear", closed: "clear", overdue: "alarm" };
 const link = document.getElementById("link");
 const panel = document.getElementById("panel");
 const fleet = document.getElementById("fleet");
@@ -188,7 +194,7 @@ async function call(method, path, body) {
 const get = path => call("GET", path).then(r => r.json());
 const post = (path, body) => call("POST", path, body ?? {});
 
-let list = [], selected = null, shown = null, detail = null, ambulances = [], centres = [];
+let list = [], selected = null, shown = null, detail = null, ambulances = [], centres = [], stations = [], units = [];
 let snap = null, sig = "", eventCount = 0, regions = null, region = null;
 const streets = {};   // region name -> the layer of its streets
 let severityChoice = null, severityTouched = false;
@@ -201,6 +207,7 @@ map.attributionControl.setPrefix(false);
 map.attributionControl.addAttribution("Streets © OpenStreetMap contributors");
 map.setView([36.37, 3.9], 12);
 const WIDTH = { motorway: 7, trunk: 7, primary: 6, secondary: 5, tertiary: 4, unclassified: 3, residential: 3, living_street: 2, service: 2 };
+const NEARBY_M = 8000;
 const markers = {}, lines = {};
 
 function pin(cls, text, extra = "") {
@@ -212,6 +219,7 @@ function setMarker(key, position, icon, title) {
 }
 function dropMarker(key) { if (markers[key]) { map.removeLayer(markers[key]); delete markers[key]; } }
 function setLine(key, points, style) { if (!lines[key]) lines[key] = L.polyline(points, style).addTo(map); }
+function dropLine(key) { if (lines[key]) { map.removeLayer(lines[key]); delete lines[key]; } }
 function dropLines() { Object.keys(lines).forEach(k => { map.removeLayer(lines[k]); delete lines[k]; }); }
 function dropAll() { Object.keys(markers).forEach(dropMarker); dropLines(); }
 
@@ -256,6 +264,10 @@ function fitToIncident() {
   centres.forEach(c => points.push([c.lat, c.lon]));
   (snap.users || []).forEach(u => u.pos && points.push(u.pos));
   if (inc.dead_zone) points.push(inc.dead_zone.zone.center);
+  if (inc.location) {       // what is around the crash: a hospital in Alger would only zoom the street map away
+    const around = L.latLng(inc.location.lat, inc.location.lon);
+    [...hospitals, ...stations, ...units.filter(u => u.location).map(u => u.location)].forEach(x => { if (around.distanceTo([x.lat, x.lon]) < NEARBY_M) points.push([x.lat, x.lon]); });
+  }
   if (points.length) map.fitBounds(L.latLngBounds(points).pad(0.2), { animate: false, maxZoom: 15 });
   showRegion(inc.location ? regionOf([inc.location.lat, inc.location.lon]) : null);
 }
@@ -263,9 +275,14 @@ function fitToIncident() {
 function renderMap() {
   const inc = snap?.incident, dz = snap?.dead_zone;
   for (const c of centres) setMarker("station" + c.id, [c.lat, c.lon], pin("station", "PC"), c.name);
+  for (const p of stations) setMarker("police" + p.id, [p.lat, p.lon], pin("station", p.force === "police" ? "PN" : "GN"), p.name);
+  for (const h of hospitals) setMarker("hospital" + h.id, [h.lat, h.lon], pin("hospital", "H"), h.name);
+  for (const u of units) {
+    if (u.location) setMarker(u.id, [u.location.lat, u.location.lon], pin("unit", u.force[0].toUpperCase() + u.id.slice(-1), `data-moving="${u.state === "en_route"}"`), u.name);
+  }
   for (const a of ambulances) {
     if (a.state === "busy" || !a.pos) { dropMarker(a.id); continue; }
-    setMarker(a.id, a.pos, pin("amb", a.id.slice(-1), `data-moving="${a.state === "dispatched"}"`), a.name);
+    setMarker(a.id, a.pos, pin("amb", a.id.slice(-1), `data-moving="${["dispatched", "transport"].includes(a.state)}"`), a.name);
   }
   if (!inc) return;
   if (dz && !lines.zone) {
@@ -281,7 +298,15 @@ function renderMap() {
     const where = lost ? dz.last_seen : u.pos;
     setMarker("u" + u.id, where, pin(cls, lost ? "?" : esc(u.name[0])), lost ? "Last known position" : u.name);
   }
-  if (inc.dispatch?.route) setLine("amb", inc.dispatch.route, { color: "#006233", weight: 5, dashArray: "2 10", lineCap: "round" });
+  const toHospital = ["transport", "delivered"].includes(inc.dispatch?.state);
+  if (toHospital && !lines.hospital) {      // the road to the crash is done: show the one to the hospital, which can be far off the map
+    dropLine("amb");
+    map.fitBounds(L.latLngBounds(inc.dispatch.route).pad(0.15), { animate: false, maxZoom: 15 });
+  }
+  if (inc.dispatch?.route) setLine(toHospital ? "hospital" : "amb", inc.dispatch.route, { color: "#006233", weight: 5, dashArray: "2 10", lineCap: "round" });
+  for (const u of inc.police) {
+    if (u.state === "en_route") setLine("p" + u.id, u.route, { color: "#3B4740", weight: 4, dashArray: "2 9", lineCap: "round" }); else dropLine("p" + u.id);
+  }
   if (inc.help_radius_km && !lines["r" + inc.help_radius_km] && inc.location) {
     lines["r" + inc.help_radius_km] = L.circle([inc.location.lat, inc.location.lon], { radius: inc.help_radius_km * 1000, color: "#0F766E", weight: 2, dashArray: "6 8", fillOpacity: 0.05, interactive: false }).addTo(map);
   }
@@ -331,11 +356,14 @@ function ambulancesHtml(list, inc) {
 
 function ambulanceHtml(a, inc, best) {
   const d = inc?.dispatch?.ambulance_id === a.id ? inc.dispatch : null;
-  let status = a.state === "busy" ? `<span class="tag">Busy</span>` : a.state === "on_scene" ? `<span class="tag ok">On scene</span>` : a.state === "dispatched" ? `<span class="tag ok">On the way</span>` : `<span class="tag">Available</span>`;
+  let status = a.state === "busy" ? `<span class="tag">Busy</span>` : a.state === "on_scene" ? `<span class="tag ok">On scene</span>` : a.state === "dispatched" ? `<span class="tag ok">On the way</span>` : a.state === "transport" ? `<span class="tag ok">To hospital</span>` : d?.state === "delivered" ? `<span class="tag ok">At hospital</span>` : `<span class="tag">Available</span>`;
   const note = a.note ? `<div class="muted">${esc(a.note)}</div>` : "";
   let body = "";
-  if (d) {
-    body = `<div class="eta" data-eta>ETA ${minutes(d.eta_remaining_s)}</div><div class="meter"><i data-meter style="width:${d.progress * 100}%"></i></div>`;
+  if (d?.state === "delivered") {
+    body = `<div class="muted">Patient delivered to ${esc(hospitalName(inc.hospital?.hospital_id))}</div>`;
+  } else if (d) {
+    if (d.state === "transport") body = `<div class="muted">Taking the patient to ${esc(hospitalName(inc.hospital?.hospital_id))}</div>`;
+    body += `<div class="eta" data-eta>ETA ${minutes(d.eta_remaining_s)}</div><div class="meter"><i data-meter style="width:${d.progress * 100}%"></i></div>`;
   } else if (a.state === "available") {
     const can = canDispatch(inc);
     body = `<div class="row"><span class="quick">${a.eta_s ? `ETA to the crash <b>${minutes(a.eta_s)}</b>` : ""}</span><button type="button" data-dispatch="${a.id}" ${can ? "" : "disabled"}>Dispatch</button></div>`;
@@ -373,6 +401,9 @@ function helpButtonsHtml(inc, usable) {
   return `<div class="actions">${inc.helper_ranges.map((r, i) => {
     const label = r.available ? `${i ? "Widen to" : "Call for help within"} ${r.km} km (${r.available})` : r.count ? `Helpers within ${r.km} km alerted` : `No helpers within ${r.km} km`;
     return `<button type="button" data-help="${r.km}" ${usable && r.available ? "" : "disabled"}>${label}</button>`;
+  }).join("")}${inc.police_ranges.map((r, i) => {
+    const label = r.available ? `${i ? "Widen police to" : "Send police within"} ${r.km} km (${r.available})` : r.count ? `Police within ${r.km} km sent` : `No police within ${r.km} km`;
+    return `<button type="button" data-police="${r.km}" ${usable && r.available ? "" : "disabled"}>${label}</button>`;
   }).join("")}</div>`;
 }
 
@@ -387,6 +418,16 @@ function helpersSection(s) {
   return helpers ? `<h2>Helpers</h2><div class="block">${helpers}</div>` : "";
 }
 
+function policeHtml(u) {
+  const tag = { en_route: "On the way", on_scene: "On scene" }[u.state];
+  return `<div class="card"><div class="row"><b>${esc(u.name)}</b><span class="tag ok">${tag}</span></div><div class="muted">${u.distance_km} km away, ${minutes(u.eta_s)} by road</div></div>`;
+}
+
+function policeSection(s) {
+  const police = s.incident.police.map(policeHtml).join("");
+  return police ? `<h2>Police and Gendarmerie</h2><div class="block">${police}</div>` : "";
+}
+
 function hospitalsHtml(inc) {
   const sent = inc?.hospital;
   const usable = inc && ["detected", "agent_confirmed", "dispatched", "on_scene"].includes(inc.stage);
@@ -399,7 +440,7 @@ function hospitalsHtml(inc) {
       : `<button type="button" class="${suggested ? "" : "quiet"}" data-hospital="${x.id}" ${usable && !sent ? "" : "disabled"}>Send patient</button>`;
     return `<div class="card"><div class="row"><b>${esc(x.name)}</b>${suggested}</div><div class="muted">${esc(meta)}</div><div class="actions">${action}</div></div>`;
   }).join("");
-  return `<h2>Hospitals</h2><div class="block">${rows || `<div class="muted">No hospital.</div>`}${usable || !inc ? "" : `<p class="hint">Available once a crash is detected.</p>`}</div>`;
+  return `<h2>Hospitals</h2><div class="block">${rows || `<div class="muted">No hospital.</div>`}${usable || sent || !inc ? "" : `<p class="hint">Available once a crash is detected.</p>`}</div>`;
 }
 let hospitals = [];
 const hospitalName = id => hospitals.find(h => h.id === id)?.name ?? `hospital ${id}`;
@@ -417,7 +458,7 @@ function deadZoneHtml(s) {
     html += `<h2>Your actions</h2><div class="block muted">Out of reach until they come back. If they aren't back by ${esc(hhmm(dz.back_by))}, help goes to the last known position.</div>`;
   } else if (!["turned_back", "returned"].includes(dz.phase)) {
     html += `<h2>Your actions</h2><div class="block">${helpButtonsHtml(inc, ["overdue", "dispatched"].includes(stage))}</div>`;
-    html += helpersSection(s);
+    html += helpersSection(s) + policeSection(s);
   }
   return html;
 }
@@ -460,7 +501,7 @@ function incidentHtml(s) {
       : `<div class="actions"><select id="severity" aria-label="Severity">${LEVELS.map(l => `<option ${l === severityChoice ? "selected" : ""}>${l}</option>`).join("")}</select><button type="button" id="confirm" ${usable ? "" : "disabled"}>Confirm crash</button></div>`;
     html += `${helpButtonsHtml(inc, usable)}</div>`;
   }
-  html += helpersSection(s);
+  html += helpersSection(s) + policeSection(s);
   return html;
 }
 
@@ -471,7 +512,7 @@ function emptyPanelHtml() {
 // What changes the layout, not the moving parts: positions and the ETA counting down update in place
 function structure(s) {
   const strip = ({ pos, eta_remaining_s, progress, route, ...rest }) => rest;
-  const inc = s.incident && { ...s.incident, dispatch: s.incident.dispatch && strip(s.incident.dispatch), updated_at: 0, events: 0, notifications: 0, people: 0, ambulances: 0, server_time: 0 };
+  const inc = s.incident && { ...s.incident, dispatch: s.incident.dispatch && strip(s.incident.dispatch), police: s.incident.police.map(strip), updated_at: 0, events: 0, notifications: 0, people: 0, ambulances: 0, server_time: 0 };
   return JSON.stringify([inc, s.ambulances.map(strip), s.users.map(({ pos, distance_km, route, ...rest }) => rest), Object.keys(calling), hospitals.map(h => [h.id, h.beds_free, h.missing_specialties])]);
 }
 
@@ -498,6 +539,7 @@ async function onAction(e) {
   b.disabled = true;
   if (b.id === "confirm") await post(`/incidents/${id}/confirm`, { severity: document.getElementById("severity").value });
   else if (b.dataset.help) await post(`/incidents/${id}/call-helpers`, { radius_km: Number(b.dataset.help) });
+  else if (b.dataset.police) await post(`/incidents/${id}/call-police`, { radius_km: Number(b.dataset.police) });
   else if (b.dataset.warn) await post(`/incidents/${id}/warn`, { message: b.dataset.warn });
   else if (b.dataset.ack) await post(`/incidents/${id}/acknowledge`);
   else if (b.dataset.phone) { await post(`/incidents/${id}/call`, { who: b.dataset.phone }); b.disabled = false; }
@@ -538,6 +580,7 @@ async function select(id) {
 
 async function refresh() {
   list = await get("/incidents");
+  units = await get("/police/units");
   // What just ended (no crash, turned back) stays on screen until the agent moves on or another incident needs them
   if (selected !== null && !list.some(i => i.id === selected)) {
     const r = await call("GET", `/incidents/${selected}`);
@@ -558,6 +601,12 @@ async function refresh() {
 
 let pending = null;
 function refreshSoon() { clearTimeout(pending); pending = setTimeout(() => refresh().catch(() => {}), 120); }
+
+function onUnitMoved(u) {
+  const i = units.findIndex(x => x.id === u.id);
+  if (i >= 0) units[i] = u;
+  renderMap();
+}
 
 function onMoved(a) {
   const i = ambulances.findIndex(x => x.id === a.id);
@@ -591,6 +640,7 @@ function connect() {
   socket.on("incident.updated", refreshSoon);
   socket.on("reset", () => { selected = null; refreshSoon(); });   // the incidents are gone: asking for the old one would be a 404
   socket.on("ambulance.moved", onMoved);
+  socket.on("police.moved", onUnitMoved);
 }
 
 async function enter() {
@@ -602,6 +652,7 @@ async function enter() {
   document.getElementById("login").hidden = true;
   document.getElementById("logout").hidden = false;
   centres = await get("/centres");
+  stations = await get("/police/stations");
   hospitals = await get("/hospitals").catch(() => []);
   connect();
   setInterval(() => socket?.connected && refresh().catch(() => {}), 10000);

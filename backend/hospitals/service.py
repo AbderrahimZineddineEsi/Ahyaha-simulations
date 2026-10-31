@@ -54,6 +54,8 @@ def patient(inc, transfer):
 async def assign(s, inc, hospital_id):
     if not core.usable(inc):
         return "no_crash"
+    if inc.status in ("transporting", "at_hospital"):
+        return "already_sent"
     h = await s.get(Hospital, hospital_id)
     if h is None:
         return "not_found"

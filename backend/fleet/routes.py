@@ -5,7 +5,7 @@ from sqlalchemy import select
 from backend import db
 from backend.deps import get_session, require
 from backend.fleet import service
-from backend.models import Ambulance, Centre
+from backend.models import Ambulance, Centre, PoliceStation, PoliceUnit
 
 router = APIRouter(tags=["fleet"])
 
@@ -42,6 +42,18 @@ async def location(ambulance_id: str, body: Position, user=Depends(require("disp
     return data
 
 
+@router.post("/ambulances/{ambulance_id}/leave-scene")
+async def leave_scene(ambulance_id: str, user=Depends(require("dispatcher")), s=Depends(get_session)):
+    amb = await s.get(Ambulance, ambulance_id)
+    if amb is None:
+        raise HTTPException(404, "not_found")
+    result = await service.leave_scene(s, amb)
+    if result != "ok":
+        raise HTTPException(409, result)
+    await db.commit(s)
+    return service.ambulance_view(amb)
+
+
 @router.post("/ambulances/{ambulance_id}/state")
 async def state(ambulance_id: str, body: State, user=Depends(require("dispatcher")), s=Depends(get_session)):
     amb = await s.get(Ambulance, ambulance_id)
@@ -52,3 +64,23 @@ async def state(ambulance_id: str, body: State, user=Depends(require("dispatcher
     await service.set_state(s, amb, body.state)
     await db.commit(s)
     return service.ambulance_view(amb)
+
+
+@router.get("/police/stations")
+async def police_stations(user=Depends(require("dispatcher")), s=Depends(get_session)):
+    return [{"id": p.id, "name": p.name, "force": p.force, "lat": p.lat, "lon": p.lon} for p in (await s.scalars(select(PoliceStation))).all()]
+
+
+@router.get("/police/units")
+async def police_units(user=Depends(require("dispatcher")), s=Depends(get_session)):
+    return [service.unit_view(u) for u in (await s.scalars(select(PoliceUnit).order_by(PoliceUnit.id))).all()]
+
+
+@router.post("/police/units/{unit_id}/location")
+async def unit_location(unit_id: str, body: Position, user=Depends(require("dispatcher")), s=Depends(get_session)):
+    unit = await s.get(PoliceUnit, unit_id)
+    if unit is None:
+        raise HTTPException(404, "not_found")
+    await service.report_unit(s, unit, body.lat, body.lon)
+    await db.commit(s)
+    return service.unit_view(unit)

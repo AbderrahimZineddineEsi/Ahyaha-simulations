@@ -7,12 +7,15 @@ from backend.geo import routing
 from backend.geo.distance import haversine_m
 from backend.incidents import core
 from backend.models import (Ambulance, DeadZoneCheckin, Dispatch, HelperRequest, IncidentEvent, Notification, PatientTransfer,
-                            User)
+                            PoliceRequest, PoliceUnit, User)
 from backend.notifications.service import view as note_view
 from backend.users.service import profile_view
 
 DZ_LABELS = {"dead_zone_watch": "Heading into a no-coverage zone", "in_zone": "In the no-coverage zone", "turned_back": "Turned back",
              "returned": "Back and reachable", "overdue": "Not back: last known position", "dispatched": "Help going to the last known position"}
+
+
+AT_HOSPITAL = {"transporting": "Patient on the way to hospital", "at_hospital": "Patient at the hospital"}
 
 
 def point(inc):
@@ -26,6 +29,8 @@ def answered(notes, kind, answer):
 def status_label(inc, notes, found=False):
     if inc.status == "closed":
         return "Closed"
+    if inc.status in AT_HOSPITAL:
+        return AT_HOSPITAL[inc.status]
     if inc.kind == "dead_zone":
         return "Found: it was a crash" if found else DZ_LABELS.get(inc.status, inc.status)
     if inc.status == "analyzing":
@@ -83,6 +88,24 @@ async def helper_ranges(s, inc):
     return out
 
 
+async def police_ranges(s, inc):
+    """For each range: how many units are in it, and how many are still free to send."""
+    if inc.lat is None:
+        return []
+    sent = {r.unit_id: r for r in (await s.scalars(select(PoliceRequest).where(PoliceRequest.incident_id == inc.id))).all()}
+    units = (await s.scalars(select(PoliceUnit).where(PoliceUnit.lat.is_not(None)))).all()
+    out = []
+    for km in settings.police_ranges_km:
+        count = available = 0
+        for u in units:
+            d = sent[u.id].distance_m if u.id in sent else haversine_m(point(inc), (u.lat, u.lon))
+            if d <= km * 1000 and (u.id in sent or u.state == "available"):
+                count += 1
+                available += u.id not in sent
+        out.append({"km": km, "count": count, "available": available})
+    return out
+
+
 def person(u, inc, kind, extra=None):
     d = None if inc.lat is None or u.last_lat is None else round(haversine_m(point(inc), (u.last_lat, u.last_lon)) / 1000, 1)
     return {"id": u.id, "name": u.name, "kind": kind, "phone": u.phone, "driving": u.last_driving, "helper": u.is_helper,
@@ -103,7 +126,7 @@ async def detail(s, inc, include_dev=False):
     if dispatch:
         total = max(dispatch.start_m, 1)
         amb = await s.get(Ambulance, dispatch.ambulance_id)
-        left = 0 if dispatch.state == "on_scene" or amb.lat is None else min(1.0, haversine_m((amb.lat, amb.lon), (dispatch.target_lat, dispatch.target_lon)) / total)
+        left = 0 if dispatch.state in ("on_scene", "delivered") or amb.lat is None else min(1.0, haversine_m((amb.lat, amb.lon), (dispatch.target_lat, dispatch.target_lon)) / total)
         d = {"ambulance_id": dispatch.ambulance_id, "eta_s": dispatch.eta_s, "state": dispatch.state, "eta_remaining_s": round(dispatch.eta_s * left),
              "progress": 1 - left, "route": dispatch.route}
 
@@ -134,6 +157,10 @@ async def detail(s, inc, include_dev=False):
               "zone": checkin.zone, "warned": checkin.warned, "told_no_help": checkin.told_no_help, "acknowledged": checkin.acknowledged,
               "found": checkin.state == "found", "overdue_at": clock.iso(checkin.overdue_at)}
 
+    police = [{"id": r.unit_id, "name": r.unit.name, "force": r.unit.force, "state": r.state, "eta_s": r.eta_s, "route": r.route,
+               "distance_km": round(r.distance_m / 1000, 1)}
+              for r in (await s.scalars(select(PoliceRequest).where(PoliceRequest.incident_id == inc.id, PoliceRequest.state != "cancelled"))).all()]
+
     protected = inc.status not in core.CLOSED
     return {**base,
             "trigger": None if inc.trigger_seq is None else {"seq": inc.trigger_seq, "peak_g": inc.peak_g},
@@ -142,6 +169,7 @@ async def detail(s, inc, include_dev=False):
             "witness": {"confirmed_by": answered(notes, "witness", "confirm"), "denied_by": answered(notes, "witness", "deny")},
             "agent": {"confirmed": inc.agent_confirmed, "severity": inc.agent_severity},
             "helpers": helpers, "dispatch": d, "helper_ranges": await helper_ranges(s, inc), "dead_zone": dz,
+            "police": police, "police_ranges": await police_ranges(s, inc),
             "profile": profile_view(victim) if protected else None,
             "people": list(people.values()), "ambulances": ambulances,
             "hospital": transfer and {"hospital_id": transfer.hospital_id, "state": transfer.state, "eta_s": transfer.eta_s},

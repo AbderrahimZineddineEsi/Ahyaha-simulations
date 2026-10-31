@@ -19,11 +19,11 @@ from backend.geo import routing
 from backend.geo.distance import Path, Trip, haversine_m
 from backend.incidents import service as incidents
 from backend.models import (Ambulance, Centre, DeadZoneCheckin, Device, Dispatch, HelperRequest, Hospital, Incident, IncidentEvent,
-                            Notification, PatientTransfer, User)
+                            Notification, PatientTransfer, PoliceRequest, PoliceStation, PoliceUnit, User)
 from backend.notifications.service import notify
 from backend.sim import blackbox as bbx
-from backend.sim.data import (AGENT, AMBULANCES, AUTO, CHECKIN_S, DEAD_ZONE, DEMO_PASSWORD, HOSPITALS, PARKED_SPREAD, PLACES, REPLAY, ROLES, SCENARIOS, STAFF,
-                              USERS)
+from backend.sim.data import (AGENT, AMBULANCES, AUTO, CHECKIN_S, DEAD_ZONE, DEMO_PASSWORD, HOSPITALS, PARKED_SPREAD, PLACES, POLICE_STATIONS, POLICE_UNITS,
+                              REPLAY, ROLES, SCENARIOS, STAFF, TRANSPORT, USERS)
 from backend.telemetry.service import service as telemetry
 from backend.users import service as users
 
@@ -79,6 +79,7 @@ class Sim:
         self.monitors = set()
         self.trips = {}
         self.finished = set()
+        self.at_scene = {}         # dispatch id -> when its crew reached the patient
         self.dz = None
         self.task = None
         self.background = set()
@@ -128,6 +129,18 @@ class Sim:
                 s.add(row)
                 await s.flush()
             self.hospital_ids[h["key"]] = row.id
+        stations = {}
+        for p in POLICE_STATIONS:
+            row = await s.scalar(select(PoliceStation).where(PoliceStation.name == p["name"]))
+            if row is None:
+                row = PoliceStation(**{k: v for k, v in p.items() if k != "key"})
+                s.add(row)
+                await s.flush()
+            stations[p["key"]] = row.id
+        for unit in POLICE_UNITS:
+            if await s.get(PoliceUnit, unit["id"]) is None:
+                start = PLACES[self.place]["police"][unit["id"]]["geometry"][0]
+                s.add(PoliceUnit(id=unit["id"], station_id=stations[unit["station"]], name=unit["name"], force=unit["force"], lat=start[0], lon=start[1]))
         for u in USERS:
             row = await users.find_by_phone(s, u["phone"])
             if row is None:
@@ -149,9 +162,16 @@ class Sim:
     async def saved_route(self, origin, dest):
         """Routes saved from OSRM, so the demo gives the same ETAs offline. Only for the demo's own places."""
         geo = PLACES[self.place]
+        if haversine_m(origin, geo["crash"]) < 150:      # hospitals are far apart: the road ends near one, not on its point
+            for r in geo["hospitals"].values():
+                if haversine_m(dest, r["geometry"][-1]) < 1000:
+                    return r
         goal = [geo["crash"]] + ([self.dz["entry"]] if self.dz else [])
         if not any(haversine_m(dest, g) < 150 for g in goal):
             return None
+        for r in geo["police"].values():
+            if haversine_m(origin, r["geometry"][0]) < 100:
+                return r
         if haversine_m(origin, geo["centre"]) < 2500:
             r = geo["ambulance"]
             return {"geometry": [list(origin), *r["geometry"]], "duration_s": r["duration_s"], "distance_m": r["distance_m"]}
@@ -175,17 +195,17 @@ class Sim:
         self.background.clear()
 
     async def reset(self, place="town"):
-        """Clears every car, incident, notification and ambulance trip. Accounts, hospitals and telemetry stay."""
+        """Clears every car, incident, notification and ambulance trip. Accounts, hospitals (with their beds back) and telemetry stay."""
         self.cancel_background()
         for bb in self.blackboxes.values():
             bb.stopped = True
         self.scenario = self.device_id = self.run_started = self.dz = None
-        self.log, self.trips, self.finished = [], {}, set()
+        self.log, self.trips, self.finished, self.at_scene = [], {}, set(), {}
         self.place = place
         settings.traffic_factor = 1.0
         await telemetry.forget_all()
         async with db.session_scope() as s:
-            for table in (IncidentEvent, Notification, Dispatch, HelperRequest, DeadZoneCheckin, PatientTransfer, Incident):
+            for table in (IncidentEvent, Notification, Dispatch, HelperRequest, PoliceRequest, DeadZoneCheckin, PatientTransfer, Incident):
                 await s.execute(delete(table))
             await s.execute(delete(Device).where(Device.id.like("user0-run%")))
             await self.place_world(s, place)
@@ -197,6 +217,11 @@ class Sim:
         for a in AMBULANCES:
             await s.execute(update(Ambulance).where(Ambulance.id == a["id"]).values(
                 state=a["state"], lat=centre[0] + a["parked"][0] * spread, lon=centre[1] + a["parked"][1] * spread, located_at=clock.now()))
+        for h in HOSPITALS:       # a delivered patient takes a bed: each run starts with the same choice of hospital
+            await s.execute(update(Hospital).where(Hospital.name == h["name"]).values(beds_free=h["beds_free"]))
+        for unit in POLICE_UNITS:
+            start = PLACES[place]["police"][unit["id"]]["geometry"][0]
+            await s.execute(update(PoliceUnit).where(PoliceUnit.id == unit["id"]).values(state="available", lat=start[0], lon=start[1], located_at=clock.now()))
         for u in USERS:
             pos = PLACES[place]["users"][str(u["id"])]
             await s.execute(update(User).where(User.id == self.ids[u["id"]]).values(
@@ -343,14 +368,19 @@ class Sim:
 
     async def move_vehicles(self, s):
         now = time.monotonic()
-        for d in (await s.scalars(select(Dispatch).where(Dispatch.state == "en_route"))).all():
-            key = ("amb", d.id)
+        for d in (await s.scalars(select(Dispatch).where(Dispatch.state == "on_scene"))).all():
+            arrived = self.at_scene.setdefault(d.id, now)     # once the agent has chosen a hospital, the crew leaves with the patient
+            if now - arrived >= TRANSPORT["scene_s"] and await s.scalar(select(PatientTransfer.id).where(PatientTransfer.incident_id == d.incident_id,
+                                                                                                         PatientTransfer.state == "incoming")):
+                await fleet.leave_scene(s, await s.get(Ambulance, d.ambulance_id))
+        for d in (await s.scalars(select(Dispatch).where(Dispatch.state.in_(fleet.MOVING)))).all():
+            key = (d.state, d.id)
             if key in self.finished:
                 continue
             amb = await s.get(Ambulance, d.ambulance_id)
             if key not in self.trips:
-                wait_s = amb.prep_s * self.trip_seconds("amb") / d.eta_s      # the crew's preparation, compressed like the drive
-                self.trips[key] = Trip(Path(d.route), now + wait_s, self.trip_seconds("amb"))
+                self.trips[key] = Trip(Path(d.route), now, TRANSPORT["trip_s"]) if d.state == "transport" else \
+                    Trip(Path(d.route), now + amb.prep_s * self.trip_seconds("amb") / d.eta_s, self.trip_seconds("amb"))   # the crew's preparation, compressed like the drive
             trip = self.trips[key]
             if now < trip.started:
                 continue
@@ -367,6 +397,15 @@ class Sim:
                 self.finished.add(key)
                 await self.found_by(s, req.incident_id, req.user.name, trip.path.points[-1])
             await users.update_location(s, req.user, *trip.position(now), driving=False)
+        for req in (await s.scalars(select(PoliceRequest).where(PoliceRequest.state == "en_route"))).all():
+            key = ("police", req.id)
+            if key in self.finished:
+                continue
+            trip = self.trips.setdefault(key, Trip(Path(req.route), now, self.trip_seconds("helper")))
+            if trip.done(now):
+                self.finished.add(key)
+                await self.found_by(s, req.incident_id, req.unit.name, trip.path.points[-1])
+            await fleet.report_unit(s, req.unit, *trip.position(now))
 
     async def found_by(self, s, incident_id, who, point):
         """In a dead zone nobody knows where the crash is until a responder gets there and says so."""

@@ -6,6 +6,10 @@ Open both before you start. Press **Reset all** on `/dev` between runs. In demo 
 
 **Operator layout.** Left: the incidents list, the ambulances (the fastest one is marked once you can dispatch) and the hospitals (the suggested one first, **Send patient** on each). Middle: the map, with the agent's last actions as short lines that fade after 7 s. Right: the incident, as before. There is no log on this screen: the full log is on `/dev`.
 
+**On the map** too: the hospitals (**H**), the police and Gendarmerie stations (**PN**, **GN**), and their units on patrol (**P1**, **G1**). In **Your actions**, **Send police within 5 km** sends every free unit in range at once, like the call for helpers but nobody has to accept; **Widen police to 20 km** adds the ones further away.
+
+**Taking the patient to hospital:** press **Send patient** on a hospital. About 4 s after the ambulance reaches the crash (or at once if it has already been there that long), it leaves on the road to that hospital: the incident shows "Patient on the way to hospital", the map follows the route, and on arrival the hospital loses a free bed and the ambulance is free again. The drive is compressed to 12 s on screen, even for Alger.
+
 **Scenarios are sped up** so the demo fits a presentation: the blackbox replay skips the first 6 s and plays the 8 s after the impact at 6x, so the car hits the wall about 2 s after you press the button and "Are you OK?" arrives about 4 s after it (it was 17 s). The crash model reads the same 16 s, because it counts packets, not seconds. The check-in lasts 10 s (the spec says 30).
 
 **When someone answers, the others are not asked any more.** If Karim answers "Are you OK?" (either button), a witness confirms, someone presses an SOS, or the agent presses Confirm crash, the witness prompts on the other phones show "Someone else answered first" and go away. If nobody answers, they stay until a witness confirms.

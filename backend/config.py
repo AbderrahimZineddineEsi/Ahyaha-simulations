@@ -26,6 +26,7 @@ class Settings:
     witness_radius_m: int = 2500     # people this close are asked to confirm the crash
     location_fresh_s: int = 900      # a user's last location counts as "nearby" only if this recent
     helper_ranges_km: tuple = (5, 20)
+    police_ranges_km: tuple = (5, 20)
     yellow_line_m: int = 300         # a driver this close to the ambulance is told to clear the way
     arrive_m: int = 60               # a responder this close to the crash is on the scene
     merge_radius_m: int = 300        # reports this close, within the window, are one incident

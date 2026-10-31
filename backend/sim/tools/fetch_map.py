@@ -2,6 +2,7 @@
 One-off: downloads what the demo map needs, so the demo works with no internet.
 
     python -m backend.sim.tools.fetch_map routes     # road routes from the OSRM demo server -> backend/sim/data/demo_routes.json
+    python -m backend.sim.tools.fetch_map responders # adds the police units' and the hospitals' routes to that file; the others stay as they are
     python -m backend.sim.tools.fetch_map leaflet    # the Leaflet library -> backend/web/static/vendor/leaflet/
     python -m backend.sim.tools.fetch_map roads      # the streets around each place, from OpenStreetMap -> backend/web/static/roads_*.json
 
@@ -35,6 +36,11 @@ PLACES = {
              "helpers": {4: (36.3700, 3.9150), 5: (36.3790, 3.8950)}, "classes": "motorway|trunk|primary|secondary|tertiary|unclassified|residential"},
     "remote": {"crash": (36.2200, 3.8300), "on_route_m": {1: 21000, 2: 16000, 3: 12000},  # RN 8B, south of Bouira
                "helpers": {4: 9500, 5: (36.1500, 3.6900)}, "classes": "motorway|trunk|primary|secondary|tertiary"},
+}
+# Where the police and Gendarmerie units patrol: a position, or a distance back along the ambulance's way
+PATROLS = {
+    "town": {"pol-1": (36.3780, 3.9110), "pol-2": (36.3640, 3.8950), "gnd-1": (36.3880, 3.9330), "gnd-2": (36.3975, 3.8420)},
+    "remote": {"gnd-2": 4000, "gnd-1": 14000, "pol-1": 21000, "pol-2": 23500},
 }
 PAUSE_S = 1.1
 
@@ -73,6 +79,19 @@ def fetch_routes():
         print(name, f"ambulance {data['ambulance']['distance_m']} m, {data['ambulance']['duration_s']} s;",
               "helpers", {k: (v["distance_m"], v["duration_s"]) for k, v in data["helpers"].items()})
         print("   km from the crash:", {k: round(haversine_m(v, crash) / 1000, 1) for k, v in data["users"].items()})
+
+
+def fetch_responders():
+    from backend.sim.data import HOSPITALS
+    path = DATA / "demo_routes.json"
+    routes = json.loads(path.read_text())
+    for name, data in routes.items():
+        road = RoadPath(data["ambulance"]["geometry"])
+        data["police"] = {uid: route(road.from_end(start) if isinstance(start, int) else start, data["crash"]) for uid, start in PATROLS[name].items()}
+        data["hospitals"] = {h["key"]: route(data["crash"], (h["lat"], h["lon"])) for h in HOSPITALS}
+        print(name, "units", {k: (v["distance_m"], v["duration_s"]) for k, v in data["police"].items()},
+              "hospitals", {k: (v["distance_m"], v["duration_s"]) for k, v in data["hospitals"].items()})
+    path.write_text(json.dumps(routes, separators=(",", ":")))
 
 
 def fetch_roads():
@@ -116,6 +135,6 @@ def fetch_leaflet():
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["routes", "leaflet", "roads"])
+    ap.add_argument("what", choices=["routes", "responders", "leaflet", "roads"])
     args = ap.parse_args()
-    {"routes": fetch_routes, "leaflet": fetch_leaflet, "roads": fetch_roads}[args.what]()
+    {"routes": fetch_routes, "responders": fetch_responders, "leaflet": fetch_leaflet, "roads": fetch_roads}[args.what]()

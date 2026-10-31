@@ -1,6 +1,10 @@
 """Step 5: dispatch, ambulance positions, ETA, the yellow line, helper ranges."""
+from sqlalchemy import select
+
+from backend import db
 from backend.config import settings
 from backend.geo.distance import Path
+from backend.models import Hospital, PoliceStation, PoliceUnit
 from backend.tests.helpers import SPOT, crash, get_incident, notes, register_device
 from backend.tests.conftest import CENTRE
 
@@ -108,3 +112,63 @@ async def test_helper_ranges_and_arrival(world, make):
     await near.post("/me/location", {"lat": SPOT[0] + 0.0001, "lon": SPOT[1], "driving": True})
     d = (await agent.get("/incidents/1")).json()
     assert d["helpers"][str(near.id)] == "on_scene" and any("Amel is on the scene" in e["text"] for e in d["events"])
+
+
+async def police_world():
+    """One unit 1 km from the crash, one about 11 km away, and one already busy on another job."""
+    async with db.session_scope() as s:
+        station = PoliceStation(name="Commissariat", force="police", lat=CENTRE[0], lon=CENTRE[1])
+        s.add(station)
+        await s.flush()
+        s.add_all([PoliceUnit(id="pol-1", station_id=station.id, name="Police 1", force="police", lat=SPOT[0] + 0.009, lon=SPOT[1]),
+                   PoliceUnit(id="gnd-1", station_id=station.id, name="Gendarmerie 1", force="gendarmerie", lat=SPOT[0] + 0.1, lon=SPOT[1]),
+                   PoliceUnit(id="pol-2", station_id=station.id, name="Police 2", force="police", state="on_scene", lat=SPOT[0], lon=SPOT[1])])
+
+
+async def test_police_go_at_once_and_arrive(world, make):
+    agent, _ = await confirmed_crash(world, make)
+    await police_world()
+    ranges = (await agent.get("/incidents/1")).json()["police_ranges"]
+    assert ranges == [{"km": 5, "count": 1, "available": 1}, {"km": 20, "count": 2, "available": 2}]
+
+    assert (await agent.post("/incidents/1/call-police", {"radius_km": 7})).status_code == 422
+    assert (await agent.post("/incidents/1/call-police", {"radius_km": 5})).status_code == 200
+    d = (await agent.get("/incidents/1")).json()
+    assert [(u["id"], u["state"]) for u in d["police"]] == [("pol-1", "en_route")]       # nobody had to accept
+    assert d["police_ranges"][0] == {"km": 5, "count": 1, "available": 0}
+    assert (await agent.post("/incidents/1/call-police", {"radius_km": 5})).status_code == 409
+
+    await agent.post("/police/units/pol-1/location", {"lat": SPOT[0], "lon": SPOT[1]})
+    assert (await agent.get("/incidents/1")).json()["police"][0]["state"] == "on_scene"
+    units = {u["id"]: u for u in (await agent.get("/police/units")).json()}
+    assert units["pol-1"]["state"] == "on_scene"
+
+    await agent.post("/incidents/1/close")
+    units = {u["id"]: u for u in (await agent.get("/police/units")).json()}
+    assert units["pol-1"]["state"] == "available"
+
+
+async def test_ambulance_takes_the_patient_to_the_hospital(world, make):
+    agent, _ = await confirmed_crash(world, make)
+    await agent.post("/incidents/1/dispatch", {"ambulance_id": "amb-1"})
+    assert (await agent.post("/ambulances/amb-1/leave-scene")).status_code == 409        # not there yet
+    await agent.post("/ambulances/amb-1/location", {"lat": SPOT[0], "lon": SPOT[1]})
+    assert (await agent.post("/ambulances/amb-1/leave-scene")).json().get("detail") == "no_hospital"
+
+    async with db.session() as s:
+        h = await s.scalar(select(Hospital).where(Hospital.id == world["h1"]))
+        beds, target = h.beds_free, (h.lat, h.lon)
+    await agent.post("/incidents/1/assign-hospital", {"hospital_id": world["h1"]})
+    assert (await agent.post("/ambulances/amb-1/leave-scene")).status_code == 200
+    d = (await agent.get("/incidents/1")).json()
+    assert d["stage"] == "transporting" and d["status"] == "Patient on the way to hospital"
+    assert d["dispatch"]["state"] == "transport" and d["dispatch"]["route"][-1] == list(target) and d["dispatch"]["eta_remaining_s"] > 0
+    assert (await agent.post("/incidents/1/assign-hospital", {"hospital_id": world["h2"]})).status_code == 409
+
+    await agent.post("/ambulances/amb-1/location", {"lat": target[0], "lon": target[1]})
+    d = (await agent.get("/incidents/1")).json()
+    assert d["stage"] == "at_hospital" and d["hospital"]["state"] == "arrived" and d["dispatch"]["eta_remaining_s"] == 0
+    ambulances = {a["id"]: a for a in (await agent.get("/ambulances")).json()}
+    assert ambulances["amb-1"]["state"] == "available"
+    async with db.session() as s:
+        assert (await s.get(Hospital, world["h1"])).beds_free == beds - 1
