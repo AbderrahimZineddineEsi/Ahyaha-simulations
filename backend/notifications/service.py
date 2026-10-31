@@ -64,14 +64,18 @@ async def expire_due(s):
     return list(rows)
 
 
-async def expire_open(s, incident_id, kinds=None):
-    """Open notifications of an incident that nobody needs answered any more."""
+async def expire_open(s, incident_id, kinds=None, state="expired", except_id=None):
+    """Open notifications of an incident that nobody needs answered any more. Returns how many it closed."""
     q = select(Notification).where(Notification.incident_id == incident_id, Notification.state == "open")
     if kinds:
         q = q.where(Notification.kind.in_(kinds))
-    for n in (await s.scalars(q)).all():
-        n.state = "expired"
+    if except_id is not None:
+        q = q.where(Notification.id != except_id)
+    rows = (await s.scalars(q)).all()
+    for n in rows:
+        n.state = state
         changed(s, n)
+    return len(rows)
 
 
 async def push(user, n):

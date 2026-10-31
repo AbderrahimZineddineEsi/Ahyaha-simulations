@@ -70,6 +70,16 @@ async def lifespan(app):
     await db.dispose()
 
 
+NO_CACHE = {"Cache-Control": "no-cache"}   # browsers may check for a newer file, but must: a reload otherwise keeps an old script
+
+
+class FreshFiles(StaticFiles):
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers.update(NO_CACHE)
+        return response
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="SolveX backend", lifespan=lifespan)
     for module in (user_routes, notification_routes, incident_routes, fleet_routes, hospital_routes, checkin_routes):
@@ -82,12 +92,12 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     def dashboard():
-        return FileResponse(WEB / "dashboard.html")
+        return FileResponse(WEB / "dashboard.html", headers=NO_CACHE)
 
     if settings.demo:
         from backend import sim
         sim.install(app)
-    app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
+    app.mount("/static", FreshFiles(directory=WEB / "static"), name="static")
     return app
 
 

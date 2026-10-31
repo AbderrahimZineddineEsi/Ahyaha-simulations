@@ -95,6 +95,15 @@ def scenario_3(turn_back):
     check("found: it was a crash", d["status"] == "Found: it was a crash")
 
 
+def scenario_n():
+    print("== N: hard braking, no crash (a quick false alarm)")
+    reset("n")
+    time.sleep(9)       # the trigger comes at 3 s and the model's answer about 1 s later
+    check("no open incident: the model said no crash", get("/incidents") == [])
+    asked = [n for i in range(6) for n in c.get("/api/v1/notifications", headers=phone(i)[0]).json()]
+    check("nobody's phone was disturbed", asked == [], asked)
+
+
 def sos():
     print("== SOS buttons")
     for kind in ("silent", "voice"):
@@ -114,7 +123,7 @@ def dev_run():
     check("one prediction, and it is a crash", len(lines) == 1 and "PREDICTION: crash" in lines[0], lines)
 
 
-RUN = {"a": scenario_a, "b": scenario_b, "2": scenario_2, "3": lambda: (scenario_3(True), scenario_3(False)), "sos": sos, "run": dev_run}
+RUN = {"a": scenario_a, "b": scenario_b, "2": scenario_2, "3": lambda: (scenario_3(True), scenario_3(False)), "n": scenario_n, "sos": sos, "run": dev_run}
 
 if __name__ == "__main__":
     which = sys.argv[1] if len(sys.argv) > 1 else "all"

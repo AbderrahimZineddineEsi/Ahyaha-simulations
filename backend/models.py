@@ -150,7 +150,7 @@ class Notification(Base):
     text: Mapped[str] = mapped_column(Text)
     actions: Mapped[list] = mapped_column(JSON, default=list)
     data: Mapped[dict] = mapped_column(JSON, default=dict)
-    state: Mapped[str] = mapped_column(String(10), default="delivered")  # open, answered, expired, delivered
+    state: Mapped[str] = mapped_column(String(10), default="delivered")  # open, answered, expired, withdrawn (no longer needed), delivered
     answer: Mapped[str | None] = mapped_column(String(24))
     created_at: Mapped[datetime] = now_col()
     due_at: Mapped[datetime | None] = mapped_column(DateTime)

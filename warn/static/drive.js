@@ -2,14 +2,14 @@
 // Runs the simulation: the car drives the route, the phone scans every few seconds, and the page shows the result on the
 // map (left) and the phone (right). The phone side is Scan.Phone, the same code tools/check_presets.js runs.
 (async function () {
-  const TIME_SCALE = 6;          // one second of the page is six seconds of driving, so a 10 s scan is about a minute of road
+  const SCAN_EVERY_S = 60;       // the phone scans about once a minute of driving, whatever the speed of the demo
   const FINISH_MARGIN_M = 30;
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const $ = (id) => document.getElementById(id);
 
   const S = {
     presets: [], preset: null, clock: null, phone: null, m1: null, m1Bytes: 0,
-    leg: "main", m: 0, simSeconds: 0, userPaused: false, comparing: false, scanTimer: 0, scanEvery: 10, busy: false,
+    leg: "main", m: 0, simSeconds: 0, userPaused: false, comparing: false, scanTimer: 0, scale: 40, autoPause: true, tour: false, tourTimer: 0, busy: false,
     scored: [], windowEnd: 0, alerts: [], pending: false, rerouted: false, finished: false,
     scans: 0, requestsTotal: 0, m1MsTotal: 0, shown: [], lastMs: 0, requestLog: [],
   };
@@ -49,19 +49,21 @@
       m1: S.m1, clock: S.clock, fetchRoad, positionOf: MapView.positionOf,
       preset: { id: preset.id, branch_m: preset.branch_m, alt: preset.alt ? true : null },
     });
-    Object.assign(S, { leg: "main", m: 0, simSeconds: 0, comparing: false, scanTimer: S.scanEvery, busy: false, scored: [], windowEnd: 0,
+    clearTimeout(S.tourTimer);
+    S.userPaused = false;
+    Object.assign(S, { leg: "main", m: preset.demo_start_m || 0, simSeconds: 0, comparing: false, scanTimer: SCAN_EVERY_S, busy: false, scored: [], windowEnd: 0,
                        alerts: [], pending: false, rerouted: false, finished: false, scans: 0, requestsTotal: 0, m1MsTotal: 0, shown: [], lastMs: 0, requestLog: [] });
     location.hash = id;
     for (const b of $("presets").children) b.setAttribute("aria-pressed", String(b.dataset.id === id));
     $("weekday").value = String(S.clock.weekday);
     $("hour").value = String(S.clock.hour);
-    $("blurb").textContent = preset.blurb;
+    $("blurb").textContent = preset.demo;
     $("log").innerHTML = "";
     $("phone-note").textContent = noteText();
     MapView.load(preset);
     PhoneUI.reset();
     PhoneUI.setClock(clockText());
-    MapView.moveCar("main", 0);
+    MapView.moveCar("main", S.m);
     setPlayLabel();
   }
 
@@ -103,8 +105,10 @@
       S.alerts.push(alert);
       S.shown.push(alert);
       MapView.addZone(alert);
+      if (S.autoPause) S.userPaused = true;
       PhoneUI.show(alert, { onOffer: openCompare, onGone: (a) => { MapView.removeZone(a); S.alerts = S.alerts.filter((x) => x !== a); } });
     }
+    setPlayLabel();
   }
 
   function addLog({ n, m, request, segments, peak, ms, result }) {
@@ -141,7 +145,7 @@
     S.leg = "alt";
     MapView.dimMainAfter(S.preset.branch_m);
     S.scored = [];
-    S.scanTimer = S.scanEvery;          // scan the new road at once
+    S.scanTimer = SCAN_EVERY_S;          // scan the new road at once
     PhoneUI.toast("Following the safer route");
   }
 
@@ -154,6 +158,27 @@
     lines.push(`${S.scans} scans, ${S.requestsTotal} map-pack requests, M1 averaged ${(S.m1MsTotal / Math.max(1, S.scans)).toFixed(1)} ms per scan`);
     PhoneUI.showEnd(lines, () => start(S.preset.id, S.clock));
     setPlayLabel();
+    if (S.tour) S.tourTimer = setTimeout(nextInTour, 3500);
+  }
+
+  function nextInTour() {
+    const i = S.presets.indexOf(S.preset);
+    if (i + 1 >= S.presets.length) { setTour(false); return; }
+    start(S.presets[i + 1].id);
+  }
+
+  function setTour(on) {
+    S.tour = on;
+    $("tour").setAttribute("aria-pressed", String(on));
+    $("tour").textContent = on ? "Stop tour" : "Play all";
+    clearTimeout(S.tourTimer);
+  }
+
+  function togglePause() {
+    if (S.finished) return;
+    S.userPaused = !S.userPaused;
+    setPlayLabel();
+    if (!S.userPaused) setTimeout(PhoneUI.collapseFull, 2500);
   }
 
   function render(now) {
@@ -165,9 +190,9 @@
     PhoneUI.setChip(here || null);
     if (here) PhoneUI.setRoad(here.seg.road, here.seg.town);
     PhoneUI.update(S.m);
-    const left = Math.max(0, Math.ceil(S.scanEvery - S.scanTimer));
-    PhoneUI.setScan(Math.min(1, S.scanTimer / S.scanEvery),
-      S.scans ? `Next scan in ${left} s · last scan: M1 took ${S.lastMs.toFixed(1)} ms` : "First scan…");
+    const left = Math.max(0, Math.ceil(SCAN_EVERY_S - S.scanTimer));
+    PhoneUI.setScan(Math.min(1, S.scanTimer / SCAN_EVERY_S),
+      S.scans ? `Next scan in ${left} s of driving · last scan: M1 took ${S.lastMs.toFixed(1)} ms` : "First scan…");
     if (now - render.last > 100) {
       render.last = now;
       PhoneUI.renderRibbon({ scored: S.scored, m: S.m, windowEnd: S.windowEnd, alerts: S.alerts.filter((a) => a.leg === S.leg) });
@@ -180,20 +205,25 @@
     const dt = Math.min(0.25, (now - lastFrame) / 1000);
     lastFrame = now;
     if (S.preset && running()) {
-      const sim = dt * TIME_SCALE;
+      const sim = dt * S.scale;
       const route = legInfo();
       S.m = Math.min(route.length, S.m + (speedAt(S.leg, S.m) / 3.6) * sim);
       S.simSeconds += sim;
       if (S.pending && S.leg === "main" && S.m >= S.preset.branch_m) switchToAlternative();
-      S.scanTimer += dt;
-      if (S.scanTimer >= S.scanEvery && !S.busy) { S.scanTimer = 0; doScan(); }
+      S.scanTimer += sim;
+      if (S.scanTimer >= SCAN_EVERY_S && !S.busy) { S.scanTimer = 0; doScan(); }
       if (S.m >= route.length - FINISH_MARGIN_M) finish();
     }
     if (S.preset) render(now);
     requestAnimationFrame(frame);
   }
 
-  function setPlayLabel() { $("play").textContent = S.userPaused ? "Resume" : "Pause"; }
+  function setPlayLabel() {
+    const paused = S.userPaused && !S.finished;
+    $("play").textContent = paused ? "Resume" : "Pause";
+    $("play").classList.toggle("paused", paused);
+    $("p-paused").hidden = !paused;
+  }
 
   async function boot() {
     PhoneUI.init();
@@ -214,14 +244,19 @@
       b.type = "button";
       b.dataset.id = p.id;
       b.textContent = p.name;
-      b.addEventListener("click", () => start(p.id));
+      b.addEventListener("click", () => { setTour(false); start(p.id); });
       $("presets").appendChild(b);
     }
     const replay = () => start(S.preset.id, { weekday: Number($("weekday").value), hour: Number($("hour").value) });
     $("weekday").addEventListener("change", replay);
     $("hour").addEventListener("change", replay);
-    $("interval").addEventListener("change", () => { S.scanEvery = Number($("interval").value); });
-    $("play").addEventListener("click", () => { S.userPaused = !S.userPaused; setPlayLabel(); });
+    $("speed").addEventListener("change", () => { S.scale = Number($("speed").value); });
+    $("autopause").addEventListener("change", () => { S.autoPause = $("autopause").checked; });
+    $("play").addEventListener("click", togglePause);
+    $("tour").addEventListener("click", () => { const on = !S.tour; setTour(on); if (on) start(S.presets[0].id); });
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space" && !/^(SELECT|INPUT|TEXTAREA)$/.test(e.target.tagName)) { e.preventDefault(); if (document.activeElement) document.activeElement.blur(); togglePause(); }
+    });
     $("restart").addEventListener("click", replay);
     window.addEventListener("resize", MapView.invalidate);
     const wanted = S.presets.find((p) => p.id === location.hash.slice(1)) || S.presets[0];

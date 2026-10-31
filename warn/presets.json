@@ -22,7 +22,9 @@
       "alt": null,
       "expect": {
         "alerts": []
-      }
+      },
+      "demo_start_m": 0,
+      "demo": "No warning. A quiet road at midday, so the phone stays silent."
     },
     {
       "id": "village",
@@ -52,7 +54,9 @@
             "button": "none"
           }
         ]
-      }
+      },
+      "demo_start_m": 2300,
+      "demo": "Warning. A 1.4 km village crossing: 'Built-up area ahead'."
     },
     {
       "id": "junction",
@@ -82,7 +86,9 @@
             "button": "none"
           }
         ]
-      }
+      },
+      "demo_start_m": 5000,
+      "demo": "Warning. A busy junction on a Friday evening: the junction is named."
     },
     {
       "id": "bouira",
@@ -133,7 +139,9 @@
             "button": "reroute"
           }
         ]
-      }
+      },
+      "demo_start_m": 0,
+      "demo": "Warning + a different route. Through the city, M1 offers the motorway: 2.2× → 1.2× risk."
     },
     {
       "id": "night",
@@ -163,7 +171,9 @@
             "button": "no-safer"
           }
         ]
-      }
+      },
+      "demo_start_m": 0,
+      "demo": "Warning. The same open road, but at 2 am: 'Risky night driving' (5.7× vs 0.6× by day)."
     },
     {
       "id": "mountain",
@@ -193,7 +203,9 @@
             "button": "no-safer"
           }
         ]
-      }
+      },
+      "demo_start_m": 0,
+      "demo": "Warning. Mountain bends at night: 'Bends in the dark'."
     }
   ]
 }

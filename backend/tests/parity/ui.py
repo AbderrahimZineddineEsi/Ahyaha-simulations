@@ -13,9 +13,15 @@ BASE = os.environ.get("SOLVEX_URL", "http://localhost:8000")
 errors = []
 
 
+def crossed_a_reset(url, status):
+    """A refresh on its way while Reset all deletes the incident gets a 404. The page handles it."""
+    return status == 404 and "/api/v1/incidents/" in url
+
+
 def watch(page, name):
-    page.on("console", lambda m: errors.append((name, m.text)) if m.type == "error" else None)
+    page.on("console", lambda m: errors.append((name, m.text)) if m.type == "error" and not crossed_a_reset(m.location["url"], 404) else None)
     page.on("pageerror", lambda e: errors.append((name, str(e))))
+    page.on("response", lambda r: errors.append((name, f"{r.status} {r.url}")) if r.status >= 400 and not crossed_a_reset(r.url, r.status) else None)   # says which URL a console error is about
 
 
 def check(label, ok):
@@ -58,7 +64,7 @@ def scenario_b(ctx):
     dash.wait_for_selector("[data-choose]", timeout=20000)
     dash.click("[data-choose]")
     dash.wait_for_selector("text=Amel Kaci is on the scene", timeout=40000)
-    check("the helper is there and the ambulance is still coming", "On the way" in dash.inner_text("#panel"))
+    check("the helper is there and the ambulance is still coming", "On the way" in dash.inner_text("#fleet"))
     dev.uncheck("#auto")
 
 
@@ -81,6 +87,7 @@ def turned_back(ctx):
     time.sleep(1.5)
     phone(dev, 0).locator("button", has_text="Turn back").click()
     dash.wait_for_selector(".incident-head:has-text('Turned back')", timeout=10000)
+    dash.wait_for_function("document.getElementById('incidents').innerText.includes('Turned back')", timeout=10000)   # two refreshes can cross: it settles
     check("the agent still sees how it ended", "Turned back" in dash.inner_text("#incidents"))
 
 
@@ -89,8 +96,16 @@ def false_alarm(ctx):
     curl = subprocess.Popen(["curl", "-sN", f"{BASE}/blackbox/brake-01/braking"], stdout=subprocess.DEVNULL)
     dash.wait_for_selector(".incident-head:has-text('Analyzing')", timeout=30000)
     dash.wait_for_selector(".incident-head:has-text('No crash')", timeout=30000)
-    check("a false alarm stays readable", "No crash" in dash.inner_text("#timeline"))
+    check("a false alarm stays readable", "No crash" in dash.inner_text("#incidents"))
     curl.kill()
+
+
+def false_alarm_on_dev(ctx):
+    """The quick no-crash scenario: the trigger fires, the model says no, and nobody's phone is disturbed."""
+    dash, dev = open_pair(ctx)
+    dev.click("[data-start='n']")
+    dev.wait_for_selector("#steps li[data-s='end']", timeout=30000)
+    check("nobody was asked anything", all(dev.locator(".phone").nth(i).locator("button").count() == 0 for i in range(6)))
 
 
 def panel_is_stable(ctx):
@@ -113,14 +128,16 @@ def scenario_a(ctx):
     check("six phones", dev.locator(".phone").count() == 6)
     dev.click("[data-start='a']")
     dash.wait_for_selector("text=High confidence", timeout=40000)
+    dev.locator(".phone").nth(0).locator("h4", has_text="Are you OK?").wait_for(timeout=8000)    # the phones follow the dashboard by a moment
     check("the victim's phone asks 'Are you OK?'", "Are you OK?" in dev.locator(".phone").nth(0).inner_text())
     dev.locator(".phone").nth(1).locator("button", has_text="Confirm").click()
     dash.wait_for_selector("text=confirmed by witness")
+    check("the other people nearby are no longer asked", all(dev.locator(".phone").nth(i).locator("button", has_text="Confirm").count() == 0 for i in (2, 3, 4, 5)))
     dash.click("#confirm")
     dash.wait_for_selector("text=You confirmed the crash")
     dash.click("[data-dispatch='amb-1']")
     dash.wait_for_selector("[data-eta]")
-    dash.wait_for_selector("text=Ambulance 1 is on the scene", timeout=60000)
+    dash.wait_for_selector("#fleet .tag:has-text('On scene')", timeout=60000)      # the line over the map fades, this stays
     check("the drivers on the road were told to clear the yellow line", "Clear the yellow line" in dev.locator(".phone").nth(2).inner_text())
 
 
@@ -133,7 +150,8 @@ def scenario_3(ctx):
     time.sleep(1.5)
     dev.locator(".phone").nth(0).locator("button", has_text="Continue anyway").click()
     dash.click("#popup [data-ack]")
-    dash.wait_for_selector("text=Out of reach until", timeout=60000)
+    # This state lasts 7 s now, and frame-based polling can sleep through it in a background tab
+    dash.wait_for_function("document.getElementById('panel').textContent.includes('Out of reach until')", polling=200, timeout=60000)
     dash.wait_for_selector("#popup h3:has-text('not back')", timeout=60000)
     dash.click("#popup [data-ack]")
     dash.click("[data-help='20']")
@@ -160,11 +178,11 @@ with sync_playwright() as p:
     outside = []
     ctx = browser.new_context(viewport={"width": 1500, "height": 900})
     ctx.route("**/*", lambda r: r.continue_() if r.request.url.startswith(BASE) else (outside.append(r.request.url), r.abort()))
-    for step in (scenario_a, scenario_b, scenario_2, scenario_3, turned_back, false_alarm, panel_is_stable, tools):
+    for step in (scenario_a, scenario_b, scenario_2, scenario_3, turned_back, false_alarm, false_alarm_on_dev, panel_is_stable, tools):
         print("==", step.__name__)
         step(ctx)
     browser.close()
-check("no request left the server (offline works)", not outside)
-check("no errors in any page", not errors)
 if errors or outside:
     print(errors, outside)
+check("no request left the server (offline works)", not outside)
+check("no errors in any page", not errors)

@@ -24,11 +24,13 @@
       </select>
     </label>
     <label>Hour <select id="hour"></select></label>
-    <label>Scan every
-      <select id="interval"><option value="5">5 s</option><option value="10" selected>10 s</option><option value="20">20 s</option></select>
+    <label>Speed
+      <select id="speed"><option value="6">6× (slow)</option><option value="20">20×</option><option value="40" selected>40× (demo)</option><option value="80">80× (fast)</option></select>
     </label>
-    <button id="play" type="button">Pause</button>
+    <label class="check"><input type="checkbox" id="autopause" checked> Pause on each warning</label>
     <button id="restart" type="button">Restart</button>
+    <button id="tour" type="button">Play all</button>
+    <button id="play" class="big" type="button">Pause</button>
   </div>
 </section>
 
@@ -66,6 +68,7 @@
         <div id="p-full" class="p-full" hidden></div>
         <div id="p-compare" class="p-compare" hidden></div>
         <div id="p-end" class="p-end" hidden></div>
+        <div id="p-paused" class="p-paused" hidden>Paused · press Space or Resume</div>
       </div>
     </div>
     <p class="phone-note" id="phone-note"></p>

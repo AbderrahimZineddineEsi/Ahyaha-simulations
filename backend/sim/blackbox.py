@@ -9,6 +9,7 @@ from pathlib import Path
 EXAMPLES = Path(__file__).parent / "examples"
 LEAD_IN_S = 10  # normal driving before a scenario
 TRIGGER_G = 1.0
+IMPACT_SEQ = 8  # in both recordings the 8th second holds the trigger
 SCENARIOS = ("normal", "crash", "braking")
 
 

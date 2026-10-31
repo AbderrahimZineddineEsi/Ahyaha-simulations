@@ -6,7 +6,8 @@ const S_NEAR = 13, S_FAR = 7;  // pixels per metre in the road scenes: close up,
 let S = S_NEAR;               // the scale of the car being drawn
 const CAR_L = 4.5, CAR_W = 1.9;
 const IMPACT_S = 8;           // the impact is the 8th second of the 16 s recording
-const ALARM = "#c8231b", CLEAR = "#17785a";
+const ALARM = "#d92b22", CLEAR = "#1f9d76";
+const FONT = "'Barlow Condensed', 'Barlow', system-ui, sans-serif";
 
 // ---------------------------------------------------------------- motion
 
@@ -51,7 +52,7 @@ const lookup = (table, t) => table[Math.min(table.length - 1, Math.round(t / BRA
 function pose(car, now) {
   const idle = { x: car.x, y: 1.75, angle: 0, t: null };
   if (!car.scn) return idle;
-  const t = (now - car.scn.startAt) / 1000;
+  const t = (car.scn.t0 || 0) + (now - car.scn.startAt) / 1000;   // t0: a replay that skips the start of the drive
   if (car.kind === "crash") {
     const wallX = car.scn.x0 + car.cruise * IMPACT_S + CAR_L / 2;
     if (t < IMPACT_S) return { x: car.scn.x0 + car.cruise * t, y: 1.75, angle: 0, t, wallX };
@@ -161,11 +162,11 @@ function drawBanner(ctx, car, now) {
   ctx.fillStyle = alarm ? ALARM : CLEAR;
   ctx.fillRect(0, 0, W, 92);
   ctx.fillStyle = "#fff";
-  ctx.font = "700 54px Bahnschrift, 'DIN Alternate', 'Roboto Condensed', system-ui, sans-serif";
+  ctx.font = `700 58px ${FONT}`;
   ctx.textBaseline = "middle";
   ctx.fillText(WORDS[r.level], 22, 47);
   ctx.textAlign = "right";
-  ctx.font = "400 34px Bahnschrift, 'DIN Alternate', 'Roboto Condensed', system-ui, sans-serif";
+  ctx.font = `500 36px ${FONT}`;
   ctx.fillText(`Crash chance ${(r.p_crash * 100).toFixed(1)}%`, W - 22, 47);
   ctx.textAlign = "left";
 }
@@ -307,15 +308,19 @@ function captionFor(car, p, now) {
   if (car.kind === "loop") return ["Normal driving. Nothing triggers.", ""];
   const t = p.t;
   if (t === null) return [car.idleText ?? "Driving normally.", ""];
-  const left = Math.max(0, Math.ceil(2 * IMPACT_S - t));
+  // A replay that is sped up after the impact (car.fast) collects the 8 s of data that much sooner
+  const fast = car.fast || 1;
+  const left = Math.max(0, Math.ceil(IMPACT_S - Math.max(0, t - IMPACT_S) * fast));
+  const waiting = t < IMPACT_S + (IMPACT_S + 2) / fast;
+  const sped = fast > 1 ? " (sped up for the demo)" : "";
   if (car.kind === "crash") {
     if (t < 3.5) return ["Driving at 73 km/h.", ""];
     if (t < IMPACT_S) return ["A T-junction ahead. The driver does not turn.", ""];
-    return t < 2 * IMPACT_S + 2 ? [`Impact. The crash model is collecting 8 s of data: ${left} s left.`, ""] : ["No answer from the server.", ""];
+    return waiting ? [`Impact. The crash model is collecting 8 s of data${sped}: ${left} s left.`, ""] : ["No answer from the server.", ""];
   }
   if (t < BRAKE.lead) return ["Driving at 90 km/h behind another car.", ""];
   if (t < IMPACT_S) return ["The car ahead brakes hard. So does the driver.", ""];
-  if (t < 2 * IMPACT_S + 2) return [`Hard braking passes 1 g. The crash model is checking: ${left} s left.`, ""];
+  if (waiting) return [`Hard braking passes 1 g. The crash model is checking${sped}: ${left} s left.`, ""];
   return ["Driving at 90 km/h.", ""];
 }
 
